@@ -2,7 +2,6 @@
 Seed RobotLyne product, solution, FAQ data into Supabase.
 Run once: python seed_data.py
 """
-import asyncio
 import os
 from dotenv import load_dotenv
 from database import get_supabase
@@ -185,7 +184,7 @@ RAG_DOCUMENTS = [
 ]
 
 
-async def seed():
+def seed():
     db = get_supabase()
     print("🌱 Seeding Supabase...")
 
@@ -207,7 +206,7 @@ async def seed():
     # RAG documents
     db.table("documents").delete().neq("id", 0).execute()
     for doc in RAG_DOCUMENTS:
-        await ingest_document(doc["content"], doc["source"])
+        ingest_document(doc["content"], doc["source"])
         print(f"  📄 Embedded: {doc['source']}")
     print(f"  ✅ {len(RAG_DOCUMENTS)} documents embedded into pgvector")
 
@@ -215,4 +214,4 @@ async def seed():
 
 
 if __name__ == "__main__":
-    asyncio.run(seed())
+    seed()

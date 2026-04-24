@@ -57,14 +57,14 @@ async def health():
 # ──────────────────────────────────────────────
 
 @app.get("/search", response_model=SearchResponse)
-async def search(q: str, threshold: float = 0.6, limit: int = 5):
+def search(q: str, threshold: float = 0.6, limit: int = 5):
     """
     Semantic search over RobotLyne content.
     Used by AI agents for fuzzy / natural language queries.
     """
     if not q:
         raise HTTPException(status_code=400, detail="Query 'q' is required.")
-    results = await semantic_search(q, threshold=threshold, limit=limit)
+    results = semantic_search(q, threshold=threshold, limit=limit)
     return SearchResponse(query=q, results=results, total=len(results))
 
 
