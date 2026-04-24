@@ -1,31 +1,54 @@
 import os
-import google.generativeai as genai
+
+# Let gRPC bypass local proxy (e.g. Clash on 7897) for Google APIs
+os.environ.setdefault("no_grpc_proxy", "generativelanguage.googleapis.com")
+os.environ.setdefault("no_proxy", "generativelanguage.googleapis.com")
+
+from google import genai
+from google.genai import types
 from database import get_supabase
 from models import RAGResult
 
-# Gemini text-embedding-004: 768 dimensions, free tier 1500 req/day
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-EMBED_MODEL = "models/text-embedding-004"
+# gemini-embedding-001 supports Matryoshka truncation; we use 768-dim to match pgvector schema
+EMBED_MODEL = "gemini-embedding-001"
+EMBED_DIM = 768
+
+_client = None
+
+
+def _get_client() -> genai.Client:
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    return _client
 
 
 def get_embedding(text: str) -> list[float]:
-    """Convert text to 768-dim vector using Google Gemini."""
-    result = genai.embed_content(
+    """Convert text to 768-dim vector (retrieval_document task)."""
+    client = _get_client()
+    result = client.models.embed_content(
         model=EMBED_MODEL,
-        content=text,
-        task_type="retrieval_document",
+        contents=text,
+        config=types.EmbedContentConfig(
+            task_type="RETRIEVAL_DOCUMENT",
+            output_dimensionality=EMBED_DIM,
+        ),
     )
-    return result["embedding"]
+    return result.embeddings[0].values
 
 
 def get_query_embedding(text: str) -> list[float]:
-    """Embed a search query (task_type=retrieval_query for better results)."""
-    result = genai.embed_content(
+    """Embed a search query (retrieval_query for better recall)."""
+    client = _get_client()
+    result = client.models.embed_content(
         model=EMBED_MODEL,
-        content=text,
-        task_type="retrieval_query",
+        contents=text,
+        config=types.EmbedContentConfig(
+            task_type="RETRIEVAL_QUERY",
+            output_dimensionality=EMBED_DIM,
+        ),
     )
-    return result["embedding"]
+    return result.embeddings[0].values
 
 
 def semantic_search(query: str, threshold: float = 0.6, limit: int = 5) -> list[RAGResult]:

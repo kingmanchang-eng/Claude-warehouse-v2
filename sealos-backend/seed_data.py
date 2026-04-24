@@ -186,31 +186,31 @@ RAG_DOCUMENTS = [
 
 def seed():
     db = get_supabase()
-    print("🌱 Seeding Supabase...")
+    print("[*] Seeding Supabase...")
 
     # Products
     db.table("products").delete().neq("id", 0).execute()
     db.table("products").insert(PRODUCTS).execute()
-    print(f"  ✅ {len(PRODUCTS)} products inserted")
+    print(f"  [OK] {len(PRODUCTS)} products inserted")
 
     # Solutions
     db.table("solutions").delete().neq("id", 0).execute()
     db.table("solutions").insert(SOLUTIONS).execute()
-    print(f"  ✅ {len(SOLUTIONS)} solutions inserted")
+    print(f"  [OK] {len(SOLUTIONS)} solutions inserted")
 
     # FAQs
     db.table("faqs").delete().neq("id", 0).execute()
     db.table("faqs").insert(FAQS).execute()
-    print(f"  ✅ {len(FAQS)} FAQs inserted")
+    print(f"  [OK] {len(FAQS)} FAQs inserted")
 
     # RAG documents
     db.table("documents").delete().neq("id", 0).execute()
     for doc in RAG_DOCUMENTS:
         ingest_document(doc["content"], doc["source"])
-        print(f"  📄 Embedded: {doc['source']}")
-    print(f"  ✅ {len(RAG_DOCUMENTS)} documents embedded into pgvector")
+        print(f"  [DOC] Embedded: {doc['source']}")
+    print(f"  [OK] {len(RAG_DOCUMENTS)} documents embedded into pgvector")
 
-    print("\n🎉 Seeding complete!")
+    print("\n[DONE] Seeding complete!")
 
 
 if __name__ == "__main__":
