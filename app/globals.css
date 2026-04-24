@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.signature-gradient {
+  background: #00daf3;
+}
+
+.glass-nav {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+}
+
+.dark .glass-nav {
+  background: rgba(6, 20, 35, 0.8);
+}
+
+.kinetic-monolith-gradient {
+  background: linear-gradient(135deg, #afc8f0 0%, #001f3f 100%);
+}
+.industrial-glass {
+  background: rgba(45, 58, 74, 0.6);
+  backdrop-filter: blur(24px);
+}
+.gradient-primary {
+  background: linear-gradient(135deg, #afc8f0 0%, #001f3f 100%);
+}
+.glass-panel {
+  background: rgba(45, 58, 74, 0.6);
+  backdrop-filter: blur(24px);
+}
+.actuator-btn {
+  background: linear-gradient(135deg, #afc8f0 0%, #001f3f 100%);
+}
+.actuator-gradient {
+  background: linear-gradient(135deg, #afc8f0 0%, #001f3f 100%);
+}
+.glass-hud {
+  background: rgba(45, 58, 74, 0.6);
+  backdrop-filter: blur(24px);
+}
+.hero-gradient {
+  background: linear-gradient(135deg, rgba(6, 20, 35, 0.9) 0%, rgba(15, 28, 44, 0.7) 100%);
+}
+.grid-subtle {
+  background-image: radial-gradient(circle, #1E2B3B 1px, transparent 1px);
+  background-size: 40px 40px;
+}

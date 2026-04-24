@@ -1,0 +1,35 @@
+# RobotLyne
+
+> RobotLyne is a warehouse automation company founded in 2004, specializing in AGV (Automated Guided Vehicle) systems, ASRS (Automated Storage and Retrieval Systems), intelligent picking robots, and warehouse management software. Serving 80+ global markets with 100+ invention patents.
+
+## Products
+
+- [AGV Forklift RL-FL1600](/products/agv-forklift): Heavy-duty autonomous forklift robot, 1600kg payload, designed for pallet transport and stacking in warehouse aisles.
+- [Lifting AGV RL-LT1000](/products/lifting-agv): Compact lifting AGV, 600–1000kg capacity, for high-density shelf environments and tight aisle operations.
+- [Storage AGV RL-SD005](/products/storage-agv): High-density automated storage shuttle for dense racking systems, maximizing vertical storage utilization.
+- [AGV Roller RL-RC200](/products/agv-roller): Conveyor-linked roller AGV bridging production lines and automated storage systems.
+- [Composite Mobile Robot RL-CR-PICK](/products/composite-mobile-robot): Autonomous mobile robot with integrated 6-axis robotic arm for intelligent goods-to-person picking.
+
+## Solutions
+
+- [ASRS (Automated Storage & Retrieval)](/solutions/asrs): End-to-end ASRS design and deployment. Achieves +75% storage capacity and 4x efficiency over manual systems.
+- [Material Handling](/solutions/material-handling): AGV-based intralogistics covering receiving, transport, sortation, and dispatch. 99.99% sorting accuracy.
+- [Intelligent Picking](/solutions/picking): AMR picking systems delivering 4x picking rate with 0% error rate using computer vision and AI.
+- [Software / LCCS](/solutions/software): Integrated WMS + WCS + Fleet Control System. Real-time multi-agent coordination for up to 500 units.
+
+## Company
+
+- [About RobotLyne](/about): Founded 2004. 1,000+ employees. 100+ patents. 30+ software copyrights. ISO-certified manufacturing.
+- [Case Studies](/case-studies): Customer success stories across automotive, e-commerce, cold chain, and pharmaceutical industries.
+- [Contact](/contact): Sales inquiries, technical consultations, and partnership discussions.
+
+## Key Facts
+
+- Founded: 2004
+- Markets served: 80+ countries
+- Employees: 1,000+
+- Patents: 100+ invention patents
+- Software copyrights: 30+
+- Product range: AGV forklifts, lifting AGVs, storage shuttles, roller AGVs, composite mobile robots
+- Software: WMS (Warehouse Management System), WCS (Warehouse Control System), LCCS (Logistics Cloud Control System)
+- Industries: E-commerce, automotive, pharmaceutical, cold chain, manufacturing, retail
