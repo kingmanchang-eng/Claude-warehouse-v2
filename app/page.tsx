@@ -1,11 +1,19 @@
 import CTAButton from '@/components/CTAButton'
 import JsonLd from '@/components/JsonLd'
-import { orgSchema, websiteSchema, breadcrumbSchema } from '@/lib/jsonld'
+import { orgSchema, websiteSchema, breadcrumbSchema, faqSchema } from '@/lib/jsonld'
+
+const HOME_FAQS = [
+  { question: "What is RobotLyne?", answer: "RobotLyne is a warehouse automation company founded in 2004, specializing in AGV systems, ASRS solutions, and intelligent warehouse management software. We serve 80+ global markets with 100+ invention patents." },
+  { question: "What products does RobotLyne offer?", answer: "RobotLyne offers AGV Forklifts (RL-FL1600), Lifting AGVs (RL-LT1000), Storage AGVs (RL-SD005), AGV Rollers (RL-RC200), and Composite Mobile Robots (RL-CR-PICK)." },
+  { question: "What industries does RobotLyne serve?", answer: "RobotLyne serves e-commerce, automotive, pharmaceutical, cold chain, manufacturing, retail, and food & beverage industries across 80+ countries." },
+  { question: "How long has RobotLyne been in business?", answer: "RobotLyne was founded in 2004 and has over 20 years of experience in warehouse automation." },
+  { question: "What is the typical ROI for a RobotLyne system?", answer: "Customers typically see ROI within 18–36 months depending on labor costs, throughput requirements, and solution complexity." },
+]
 
 export default function Home() {
   return (
     <main className="pt-20">
-        <JsonLd data={[orgSchema(), websiteSchema(), breadcrumbSchema([{ name: "Home", url: "/" }])]} />
+        <JsonLd data={[orgSchema(), websiteSchema(), breadcrumbSchema([{ name: "Home", url: "/" }]), faqSchema(HOME_FAQS)]} />
         {/* Hero Section */}
         <section className="relative min-h-[921px] flex items-center overflow-hidden bg-surface">
           <div className="absolute inset-0 z-0">

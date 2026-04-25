@@ -1,11 +1,19 @@
 import CTAButton from '@/components/CTAButton'
 import JsonLd from '@/components/JsonLd'
-import { orgSchema, breadcrumbSchema } from '@/lib/jsonld'
+import { orgSchema, breadcrumbSchema, faqSchema } from '@/lib/jsonld'
+
+const ABOUT_FAQS = [
+  { question: "When was RobotLyne founded?", answer: "RobotLyne was founded in 2004 and has over 20 years of experience in warehouse automation." },
+  { question: "Where is RobotLyne headquartered?", answer: "RobotLyne is headquartered in China with offices in 10+ countries across Europe, North America, Southeast Asia, and the Middle East." },
+  { question: "How many employees does RobotLyne have?", answer: "RobotLyne has over 1,000 employees, with approximately 30% dedicated to research and development." },
+  { question: "What certifications does RobotLyne hold?", answer: "RobotLyne holds ISO 9001, CE, and FCC certifications. Our products meet international safety and quality standards." },
+  { question: "How many patents does RobotLyne have?", answer: "RobotLyne holds 100+ invention patents and 30+ software copyrights, reflecting our commitment to innovation in warehouse automation." },
+]
 
 export default function About() {
   return (
     <main className="pt-20">
-      <JsonLd data={[orgSchema(), breadcrumbSchema([{ name: "Home", url: "/" }, { name: "About", url: "/about" }])]} />
+      <JsonLd data={[orgSchema(), breadcrumbSchema([{ name: "Home", url: "/" }, { name: "About", url: "/about" }]), faqSchema(ABOUT_FAQS)]} />
       {/* Hero Section */}
       <section className="relative h-[819px] flex items-center overflow-hidden">
         <div className="absolute inset-0 z-0">

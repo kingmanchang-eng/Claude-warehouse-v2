@@ -1,10 +1,18 @@
 import JsonLd from '@/components/JsonLd'
-import { orgSchema, breadcrumbSchema } from '@/lib/jsonld'
+import { orgSchema, breadcrumbSchema, faqSchema } from '@/lib/jsonld'
+
+const CONTACT_FAQS = [
+  { question: "How do I contact RobotLyne for a sales inquiry?", answer: "You can reach RobotLyne by filling out the contact form on this page, or by emailing info@robotlyne.com. Our team responds within 24 hours." },
+  { question: "What is the minimum order for AGV systems?", answer: "RobotLyne offers both single-unit pilots and full-fleet deployments. Contact our sales team for project-based pricing tailored to your needs." },
+  { question: "How long does implementation take?", answer: "Typical deployment takes 8–16 weeks from order to go-live, including site survey, system design, installation, and staff training." },
+  { question: "Does RobotLyne provide after-sales support?", answer: "Yes. RobotLyne provides full after-sales support including remote monitoring, preventive maintenance, spare parts supply, and on-site technical services." },
+  { question: "Can RobotLyne integrate with our existing WMS or ERP?", answer: "Yes. The LCCS platform integrates with SAP, Oracle, Manhattan Associates, and other major WMS/ERP systems via REST API." },
+]
 
 export default function Contact() {
   return (
     <main className="pt-20">
-      <JsonLd data={[orgSchema(), breadcrumbSchema([{ name: "Home", url: "/" }, { name: "Contact", url: "/contact" }])]} />
+      <JsonLd data={[orgSchema(), breadcrumbSchema([{ name: "Home", url: "/" }, { name: "Contact", url: "/contact" }]), faqSchema(CONTACT_FAQS)]} />
       {/* Hero Section */}
       <section className="relative h-[614px] flex items-center overflow-hidden bg-surface-container-lowest">
         <div className="absolute inset-0 z-0">
