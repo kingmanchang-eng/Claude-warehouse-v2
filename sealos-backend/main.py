@@ -3,15 +3,17 @@ RobotLyne AI Backend — FastAPI
 Handles AI agent requests: RAG search, product queries, MCP tool calls, inquiry submission.
 """
 import os
+import json
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from models import (
     InquiryRequest, InquiryResponse,
     ProductResult, SolutionResult, FAQResult,
-    SearchResponse, MCPExecuteRequest, MCPExecuteResponse,
+    SearchResponse,
 )
 from database import get_supabase
 from rag import semantic_search
@@ -57,14 +59,14 @@ async def health():
 # ──────────────────────────────────────────────
 
 @app.get("/search", response_model=SearchResponse)
-def search(q: str, threshold: float = 0.6, limit: int = 5):
+async def search(q: str, threshold: float = 0.6, limit: int = 5):
     """
     Semantic search over RobotLyne content.
     Used by AI agents for fuzzy / natural language queries.
     """
     if not q:
         raise HTTPException(status_code=400, detail="Query 'q' is required.")
-    results = semantic_search(q, threshold=threshold, limit=limit)
+    results = await semantic_search(q, threshold=threshold, limit=limit)
     return SearchResponse(query=q, results=results, total=len(results))
 
 
@@ -147,63 +149,169 @@ async def submit_inquiry(body: InquiryRequest):
 
 
 # ──────────────────────────────────────────────
-# MCP — Unified Execute Endpoint
+# MCP JSON-RPC 2.0 — Claude Desktop integration
 # ──────────────────────────────────────────────
 
-@app.post("/mcp/execute", response_model=MCPExecuteResponse)
-async def mcp_execute(body: MCPExecuteRequest):
+MCP_TOOLS = [
+    {
+        "name": "search",
+        "description": "Semantic search over RobotLyne products, solutions, and FAQs using natural language. Use for any warehouse automation query or product recommendation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "q": {"type": "string", "description": "Natural language search query"},
+                "limit": {"type": "integer", "description": "Number of results (default 5)", "default": 5},
+            },
+            "required": ["q"],
+        },
+    },
+    {
+        "name": "list_products",
+        "description": "List all RobotLyne AGV products. Optionally filter by category.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "category": {"type": "string", "description": "Filter by category (optional)"},
+            },
+        },
+    },
+    {
+        "name": "get_product",
+        "description": "Get full technical specs of a product by model number (e.g. RL-FL1600).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "model_number": {"type": "string", "description": "Product model number"},
+            },
+            "required": ["model_number"],
+        },
+    },
+    {
+        "name": "list_solutions",
+        "description": "List all warehouse automation solutions: ASRS, material handling, intelligent picking, LCCS software.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "list_faqs",
+        "description": "List frequently asked questions about RobotLyne products and services.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "category": {"type": "string", "description": "Filter by FAQ category (optional)"},
+            },
+        },
+    },
+    {
+        "name": "submit_inquiry",
+        "description": "Submit a sales inquiry on behalf of a user. Use when user wants to contact RobotLyne or request a quote. Always confirm with user before calling.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "email": {"type": "string", "description": "User's email address (required)"},
+                "name": {"type": "string", "description": "User's name"},
+                "company": {"type": "string", "description": "User's company name"},
+                "phone": {"type": "string", "description": "User's phone number"},
+                "message": {"type": "string", "description": "Inquiry message"},
+            },
+            "required": ["email"],
+        },
+    },
+]
+
+
+@app.post("/mcp")
+async def mcp_jsonrpc(request: Request):
     """
-    Unified MCP tool execution endpoint.
-    AI agents send { "tool": "<name>", "args": { ... } } and receive structured results.
+    MCP JSON-RPC 2.0 endpoint.
+    Implements: initialize, tools/list, tools/call
+    Used by Claude Desktop and other MCP-compatible clients.
     """
-    tool = body.tool
-    args = body.args
-    db = get_supabase()
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}})
 
-    if tool == "search":
-        q = args.get("q") or args.get("query")
-        if not q:
-            raise HTTPException(status_code=400, detail="args.q is required for tool 'search'")
-        results = semantic_search(q, threshold=float(args.get("threshold", 0.6)), limit=int(args.get("limit", 5)))
-        return MCPExecuteResponse(tool=tool, result={"query": q, "results": [r.model_dump() for r in results], "total": len(results)})
+    method = body.get("method")
+    req_id = body.get("id")
+    params = body.get("params", {})
 
-    elif tool == "list_products":
-        q = db.table("products").select("*")
-        if args.get("category"):
-            q = q.eq("category", args["category"])
-        result = q.order("id").execute()
-        return MCPExecuteResponse(tool=tool, result=result.data or [])
+    # ── Handshake ──────────────────────────────
+    if method == "initialize":
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "robotlyne", "version": "1.0.0"},
+            },
+        }
 
-    elif tool == "get_product":
-        model_number = args.get("model_number") or args.get("model")
-        if not model_number:
-            raise HTTPException(status_code=400, detail="args.model_number is required for tool 'get_product'")
-        result = db.table("products").select("*").eq("model_number", model_number).single().execute()
-        if not result.data:
-            raise HTTPException(status_code=404, detail=f"Product '{model_number}' not found.")
-        return MCPExecuteResponse(tool=tool, result=result.data)
+    if method == "notifications/initialized":
+        return JSONResponse(content=None, status_code=204)
 
-    elif tool == "list_solutions":
-        result = db.table("solutions").select("*").order("id").execute()
-        return MCPExecuteResponse(tool=tool, result=result.data or [])
+    # ── Tool discovery ─────────────────────────
+    if method == "tools/list":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": MCP_TOOLS}}
 
-    elif tool == "list_faqs":
-        q = db.table("faqs").select("*")
-        if args.get("category"):
-            q = q.eq("category", args["category"])
-        result = q.order("id").execute()
-        return MCPExecuteResponse(tool=tool, result=result.data or [])
+    # ── Tool execution ─────────────────────────
+    if method == "tools/call":
+        tool_name = params.get("name")
+        arguments = params.get("arguments", {})
+        db = get_supabase()
 
-    elif tool == "submit_inquiry":
-        if not args.get("email"):
-            raise HTTPException(status_code=400, detail="args.email is required for tool 'submit_inquiry'")
-        inquiry = InquiryRequest(**args)
-        result = db.table("inquiries").insert(inquiry.model_dump()).execute()
-        row = result.data[0]
-        return MCPExecuteResponse(tool=tool, result={"id": row["id"], "email": row["email"], "message": "Inquiry submitted successfully."})
+        try:
+            if tool_name == "search":
+                results = await semantic_search(
+                    arguments["q"],
+                    threshold=0.6,
+                    limit=int(arguments.get("limit", 5)),
+                )
+                result_data = [r.model_dump() for r in results]
 
-    else:
-        raise HTTPException(status_code=400, detail=f"Unknown tool '{tool}'. Call GET /mcp/tools to see available tools.")
+            elif tool_name == "list_products":
+                q = db.table("products").select("*")
+                if arguments.get("category"):
+                    q = q.eq("category", arguments["category"])
+                result_data = q.order("id").execute().data or []
+
+            elif tool_name == "get_product":
+                row = db.table("products").select("*").eq("model_number", arguments["model_number"]).single().execute()
+                if not row.data:
+                    raise ValueError(f"Product '{arguments['model_number']}' not found")
+                result_data = row.data
+
+            elif tool_name == "list_solutions":
+                result_data = db.table("solutions").select("*").order("id").execute().data or []
+
+            elif tool_name == "list_faqs":
+                q = db.table("faqs").select("*")
+                if arguments.get("category"):
+                    q = q.eq("category", arguments["category"])
+                result_data = q.order("id").execute().data or []
+
+            elif tool_name == "submit_inquiry":
+                payload = {k: arguments[k] for k in ["email", "name", "company", "phone", "message"] if k in arguments}
+                payload["source"] = "mcp"
+                row = db.table("inquiries").insert(payload).execute()
+                result_data = {"id": row.data[0]["id"], "message": "Inquiry submitted successfully."}
+
+            else:
+                return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Unknown tool '{tool_name}'"}}
+
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "content": [{"type": "text", "text": json.dumps(result_data, ensure_ascii=False, default=str)}]
+                },
+            }
+
+        except Exception as e:
+            return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32603, "message": str(e)}}
+
+    # ── Unknown method ─────────────────────────
+    return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Method not found: {method}"}}
 
 
 # ──────────────────────────────────────────────
@@ -218,40 +326,34 @@ async def mcp_tools():
             {
                 "name": "search",
                 "description": "Semantic search over RobotLyne product & solution content. Use for fuzzy / natural language queries.",
-                "execute": "POST /mcp/execute  {\"tool\": \"search\", \"args\": {\"q\": \"<query>\", \"limit\": 5}}",
-                "direct": "GET /_ai/search?q={query}",
+                "endpoint": "GET /search?q={query}",
                 "parameters": {"q": "string (required)", "limit": "int (default 5)"},
             },
             {
                 "name": "list_products",
                 "description": "List all AGV products. Optionally filter by category.",
-                "execute": "POST /mcp/execute  {\"tool\": \"list_products\", \"args\": {\"category\": \"<optional>\"}}",
-                "direct": "GET /_ai/products",
+                "endpoint": "GET /products",
                 "parameters": {"category": "string (optional)"},
             },
             {
                 "name": "get_product",
                 "description": "Get full specs of a product by model number (e.g. RL-FL1600).",
-                "execute": "POST /mcp/execute  {\"tool\": \"get_product\", \"args\": {\"model_number\": \"RL-FL1600\"}}",
-                "direct": "GET /_ai/products/{model_number}",
+                "endpoint": "GET /products/{model_number}",
             },
             {
                 "name": "list_solutions",
                 "description": "List all warehouse automation solutions (ASRS, picking, material handling, software).",
-                "execute": "POST /mcp/execute  {\"tool\": \"list_solutions\", \"args\": {}}",
-                "direct": "GET /_ai/solutions",
+                "endpoint": "GET /solutions",
             },
             {
                 "name": "list_faqs",
                 "description": "List frequently asked questions about RobotLyne products and services.",
-                "execute": "POST /mcp/execute  {\"tool\": \"list_faqs\", \"args\": {}}",
-                "direct": "GET /_ai/faqs",
+                "endpoint": "GET /faqs",
             },
             {
                 "name": "submit_inquiry",
                 "description": "Submit a sales inquiry on behalf of a user. Requires email.",
-                "execute": "POST /mcp/execute  {\"tool\": \"submit_inquiry\", \"args\": {\"email\": \"<required>\", \"name\": \"\", \"company\": \"\", \"message\": \"\"}}",
-                "direct": "POST /_ai/inquiry",
+                "endpoint": "POST /inquiry",
                 "parameters": {
                     "email": "string (required)",
                     "name": "string",

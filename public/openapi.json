@@ -1,0 +1,256 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "RobotLyne Warehouse Automation API",
+    "description": "Query RobotLyne's AGV robots and ASRS warehouse automation products, solutions, and FAQs. Submit sales inquiries. RobotLyne is a manufacturer founded in 2004 with 100+ patents and operations in 80+ global markets.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://kcpvsulmbpbd.usw-1.sealos.app",
+      "description": "RobotLyne AI Backend (update to https://YOUR_DOMAIN/_ai after domain binding)"
+    }
+  ],
+  "paths": {
+    "/search": {
+      "get": {
+        "operationId": "searchContent",
+        "summary": "Semantic search over all RobotLyne content",
+        "description": "Natural language search across products, solutions, and FAQs. Use this for any warehouse automation query, product recommendation, or requirement matching. Returns semantically relevant results ranked by similarity.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Natural language search query, e.g. 'AGV that can carry 1000kg' or 'cold chain storage solution'",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of results to return (default: 5)",
+            "schema": { "type": "integer", "default": 5 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Semantically ranked search results",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SearchResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products": {
+      "get": {
+        "operationId": "listProducts",
+        "summary": "List all AGV products",
+        "description": "Returns the full RobotLyne product catalog. Use when the user wants to browse all products or filter by a specific category (e.g. forklift, lifting, storage, roller, composite).",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "description": "Filter by product category",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of products",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Product" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products/{model_number}": {
+      "get": {
+        "operationId": "getProduct",
+        "summary": "Get full technical specs of a product",
+        "description": "Returns complete product details including payload, speed, navigation type, dimensions, and use cases. Use when the user asks about a specific model number.",
+        "parameters": [
+          {
+            "name": "model_number",
+            "in": "path",
+            "required": true,
+            "description": "Product model number, e.g. RL-FL1600, RL-LT1000, RL-SD005",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product details",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Product" }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found"
+          }
+        }
+      }
+    },
+    "/solutions": {
+      "get": {
+        "operationId": "listSolutions",
+        "summary": "List all warehouse automation solutions",
+        "description": "Returns all RobotLyne solution packages: ASRS, material handling, intelligent picking, and LCCS software. Use when the user asks about warehouse automation scenarios or industry applications.",
+        "responses": {
+          "200": {
+            "description": "List of solutions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Solution" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/faqs": {
+      "get": {
+        "operationId": "listFAQs",
+        "summary": "List frequently asked questions",
+        "description": "Returns common questions and answers about RobotLyne products, pricing, deployment, and after-sales service. Use when the user asks a question that might be in the FAQ.",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "description": "Filter by FAQ category",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of FAQs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/FAQ" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/inquiry": {
+      "post": {
+        "operationId": "submitInquiry",
+        "summary": "Submit a sales inquiry",
+        "description": "Submit a sales inquiry or quote request to RobotLyne on behalf of a user. Use this when the user explicitly wants to contact RobotLyne, request a quote, or schedule a consultation. Always confirm with the user before submitting.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/InquiryRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inquiry submitted successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/InquiryResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SearchResponse": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string" },
+          "total": { "type": "integer" },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "content": { "type": "string" },
+                "source": { "type": "string" },
+                "similarity": { "type": "number" }
+              }
+            }
+          }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "model_number": { "type": "string" },
+          "category": { "type": "string" },
+          "payload_kg": { "type": "number", "description": "Maximum payload in kilograms" },
+          "speed_ms": { "type": "number", "description": "Maximum speed in meters per second" },
+          "description": { "type": "string" },
+          "specs": { "type": "object" },
+          "use_cases": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "Solution": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "description": { "type": "string" },
+          "key_metrics": { "type": "object" },
+          "related_products": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "FAQ": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "question": { "type": "string" },
+          "answer": { "type": "string" },
+          "category": { "type": "string" }
+        }
+      },
+      "InquiryRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "description": "User's email address (required)" },
+          "name": { "type": "string", "description": "User's full name" },
+          "company": { "type": "string", "description": "User's company name" },
+          "phone": { "type": "string", "description": "User's phone number" },
+          "message": { "type": "string", "description": "Inquiry details or question" }
+        }
+      },
+      "InquiryResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "email": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}

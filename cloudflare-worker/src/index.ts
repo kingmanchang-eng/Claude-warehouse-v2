@@ -183,7 +183,9 @@ export default {
 
     // ── AI Agent Tool Routes → Sealos backend ──────────────────────────────
     // /_ai/search, /_ai/products, /_ai/faqs, /_ai/inquiry, etc.
-    if (pathname.startsWith('/_ai/') || pathname.startsWith('/mcp/')) {
+    // /mcp  (MCP JSON-RPC root for Claude Desktop)
+    // /mcp/* (MCP sub-routes: /mcp/tools, /mcp/execute, etc.)
+    if (pathname.startsWith('/_ai/') || pathname === '/mcp' || pathname.startsWith('/mcp/')) {
       return proxyToBackend(request, pathname, search)
     }
 
