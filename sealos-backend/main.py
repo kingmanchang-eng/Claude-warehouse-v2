@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from models import (
     InquiryRequest, InquiryResponse,
     ProductResult, SolutionResult, FAQResult,
-    SearchResponse,
+    SearchResponse, MCPExecuteRequest, MCPExecuteResponse,
 )
 from database import get_supabase
 from rag import semantic_search
@@ -147,6 +147,66 @@ async def submit_inquiry(body: InquiryRequest):
 
 
 # ──────────────────────────────────────────────
+# MCP — Unified Execute Endpoint
+# ──────────────────────────────────────────────
+
+@app.post("/mcp/execute", response_model=MCPExecuteResponse)
+async def mcp_execute(body: MCPExecuteRequest):
+    """
+    Unified MCP tool execution endpoint.
+    AI agents send { "tool": "<name>", "args": { ... } } and receive structured results.
+    """
+    tool = body.tool
+    args = body.args
+    db = get_supabase()
+
+    if tool == "search":
+        q = args.get("q") or args.get("query")
+        if not q:
+            raise HTTPException(status_code=400, detail="args.q is required for tool 'search'")
+        results = semantic_search(q, threshold=float(args.get("threshold", 0.6)), limit=int(args.get("limit", 5)))
+        return MCPExecuteResponse(tool=tool, result={"query": q, "results": [r.model_dump() for r in results], "total": len(results)})
+
+    elif tool == "list_products":
+        q = db.table("products").select("*")
+        if args.get("category"):
+            q = q.eq("category", args["category"])
+        result = q.order("id").execute()
+        return MCPExecuteResponse(tool=tool, result=result.data or [])
+
+    elif tool == "get_product":
+        model_number = args.get("model_number") or args.get("model")
+        if not model_number:
+            raise HTTPException(status_code=400, detail="args.model_number is required for tool 'get_product'")
+        result = db.table("products").select("*").eq("model_number", model_number).single().execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail=f"Product '{model_number}' not found.")
+        return MCPExecuteResponse(tool=tool, result=result.data)
+
+    elif tool == "list_solutions":
+        result = db.table("solutions").select("*").order("id").execute()
+        return MCPExecuteResponse(tool=tool, result=result.data or [])
+
+    elif tool == "list_faqs":
+        q = db.table("faqs").select("*")
+        if args.get("category"):
+            q = q.eq("category", args["category"])
+        result = q.order("id").execute()
+        return MCPExecuteResponse(tool=tool, result=result.data or [])
+
+    elif tool == "submit_inquiry":
+        if not args.get("email"):
+            raise HTTPException(status_code=400, detail="args.email is required for tool 'submit_inquiry'")
+        inquiry = InquiryRequest(**args)
+        result = db.table("inquiries").insert(inquiry.model_dump()).execute()
+        row = result.data[0]
+        return MCPExecuteResponse(tool=tool, result={"id": row["id"], "email": row["email"], "message": "Inquiry submitted successfully."})
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown tool '{tool}'. Call GET /mcp/tools to see available tools.")
+
+
+# ──────────────────────────────────────────────
 # MCP Tool manifest (for AI agent discovery)
 # ──────────────────────────────────────────────
 
@@ -158,34 +218,40 @@ async def mcp_tools():
             {
                 "name": "search",
                 "description": "Semantic search over RobotLyne product & solution content. Use for fuzzy / natural language queries.",
-                "endpoint": "GET /search?q={query}",
+                "execute": "POST /mcp/execute  {\"tool\": \"search\", \"args\": {\"q\": \"<query>\", \"limit\": 5}}",
+                "direct": "GET /_ai/search?q={query}",
                 "parameters": {"q": "string (required)", "limit": "int (default 5)"},
             },
             {
                 "name": "list_products",
                 "description": "List all AGV products. Optionally filter by category.",
-                "endpoint": "GET /products",
+                "execute": "POST /mcp/execute  {\"tool\": \"list_products\", \"args\": {\"category\": \"<optional>\"}}",
+                "direct": "GET /_ai/products",
                 "parameters": {"category": "string (optional)"},
             },
             {
                 "name": "get_product",
                 "description": "Get full specs of a product by model number (e.g. RL-FL1600).",
-                "endpoint": "GET /products/{model_number}",
+                "execute": "POST /mcp/execute  {\"tool\": \"get_product\", \"args\": {\"model_number\": \"RL-FL1600\"}}",
+                "direct": "GET /_ai/products/{model_number}",
             },
             {
                 "name": "list_solutions",
                 "description": "List all warehouse automation solutions (ASRS, picking, material handling, software).",
-                "endpoint": "GET /solutions",
+                "execute": "POST /mcp/execute  {\"tool\": \"list_solutions\", \"args\": {}}",
+                "direct": "GET /_ai/solutions",
             },
             {
                 "name": "list_faqs",
                 "description": "List frequently asked questions about RobotLyne products and services.",
-                "endpoint": "GET /faqs",
+                "execute": "POST /mcp/execute  {\"tool\": \"list_faqs\", \"args\": {}}",
+                "direct": "GET /_ai/faqs",
             },
             {
                 "name": "submit_inquiry",
                 "description": "Submit a sales inquiry on behalf of a user. Requires email.",
-                "endpoint": "POST /inquiry",
+                "execute": "POST /mcp/execute  {\"tool\": \"submit_inquiry\", \"args\": {\"email\": \"<required>\", \"name\": \"\", \"company\": \"\", \"message\": \"\"}}",
+                "direct": "POST /_ai/inquiry",
                 "parameters": {
                     "email": "string (required)",
                     "name": "string",

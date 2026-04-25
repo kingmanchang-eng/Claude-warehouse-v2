@@ -60,3 +60,14 @@ class SearchResponse(BaseModel):
     query: str
     results: List[RAGResult]
     total: int
+
+
+class MCPExecuteRequest(BaseModel):
+    tool: str = Field(..., description="Tool name: search | list_products | get_product | list_solutions | list_faqs | submit_inquiry")
+    args: dict = Field(default={}, description="Tool arguments as key-value pairs")
+
+
+class MCPExecuteResponse(BaseModel):
+    tool: str
+    result: object
+    ok: bool = True
