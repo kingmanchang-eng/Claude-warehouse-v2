@@ -42,20 +42,16 @@ async function proxyToBackend(request: Request, pathname: string, search: string
     : pathname                          // /mcp/tools → /mcp/tools
 
   const backendUrl = `${BACKEND_URL}${backendPath}${search}`
+  const isReadOnly = ['GET', 'HEAD'].includes(request.method)
 
-  const proxied = new Response(
-    await fetch(new Request(backendUrl, {
-      method: request.method,
-      headers: { 'Content-Type': 'application/json' },
-      body: ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
-    })).then(r => r.body)
-  )
+  // Read body once (streams can only be consumed once)
+  const body = isReadOnly ? undefined : await request.text()
 
-  const res = await fetch(new Request(backendUrl, {
+  const res = await fetch(backendUrl, {
     method: request.method,
     headers: { 'Content-Type': 'application/json' },
-    body: ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
-  }))
+    body: body,
+  })
 
   return new Response(res.body, {
     status: res.status,
