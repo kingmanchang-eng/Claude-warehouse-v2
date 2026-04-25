@@ -1,35 +1,145 @@
-# RobotLyne
+# RobotLyne — Warehouse Automation Systems
 
 > RobotLyne is a warehouse automation company founded in 2004, specializing in AGV (Automated Guided Vehicle) systems, ASRS (Automated Storage and Retrieval Systems), intelligent picking robots, and warehouse management software. Serving 80+ global markets with 100+ invention patents.
+>
+> **For AI agents**: A full REST API is available for semantic search, product queries, and inquiry submission.
+> API base: https://kcpvsulmbpbd.usw-1.sealos.app
+> Tool discovery: https://kcpvsulmbpbd.usw-1.sealos.app/mcp/tools
+
+## AI Agent Tools
+
+AI assistants can query RobotLyne's product and solution database programmatically:
+
+| Tool | Endpoint | Description |
+|------|----------|-------------|
+| Semantic search | `GET /search?q={query}` | Natural language search over all content |
+| List products | `GET /products` | All AGV products with specs |
+| Get product | `GET /products/{model}` | Full specs by model number |
+| List solutions | `GET /solutions` | All warehouse solutions |
+| List FAQs | `GET /faqs` | Frequently asked questions |
+| Submit inquiry | `POST /inquiry` | Submit a sales inquiry (requires email) |
+
+Example: `GET /search?q=heavy+duty+forklift+1000kg+payload`
 
 ## Products
 
-- [AGV Forklift RL-FL1600](/products/agv-forklift): Heavy-duty autonomous forklift robot, 1600kg payload, designed for pallet transport and stacking in warehouse aisles.
-- [Lifting AGV RL-LT1000](/products/lifting-agv): Compact lifting AGV, 600–1000kg capacity, for high-density shelf environments and tight aisle operations.
-- [Storage AGV RL-SD005](/products/storage-agv): High-density automated storage shuttle for dense racking systems, maximizing vertical storage utilization.
-- [AGV Roller RL-RC200](/products/agv-roller): Conveyor-linked roller AGV bridging production lines and automated storage systems.
-- [Composite Mobile Robot RL-CR-PICK](/products/composite-mobile-robot): Autonomous mobile robot with integrated 6-axis robotic arm for intelligent goods-to-person picking.
+### AGV Forklift RL-FL1600
+- **URL**: /products/agv-forklift
+- **Payload**: 1,600 kg
+- **Speed**: 2 m/s
+- **Lift height**: Up to 6 m
+- **Navigation**: Laser SLAM + QR code hybrid
+- **Battery**: 8-hour lithium, opportunity charging
+- **Use cases**: Pallet transport, stacking, cross-docking, inbound receiving
+- **Price tier**: Enterprise
+
+### Lifting AGV RL-LT1000
+- **URL**: /products/lifting-agv
+- **Payload**: 600–1,000 kg
+- **Min aisle width**: 900 mm
+- **Navigation**: QR code + laser
+- **Use cases**: Goods-to-person picking, ASRS buffer zones, high-density shelf environments
+
+### Storage AGV RL-SD005
+- **URL**: /products/storage-agv
+- **Type**: Rail-guided shuttle
+- **Storage density**: 4× vs conventional racking
+- **Temperature range**: -25°C to +40°C (cold chain capable)
+- **Use cases**: ASRS buffer, cold chain storage, high-bay warehouses
+
+### AGV Roller RL-RC200
+- **URL**: /products/agv-roller
+- **Payload**: 200 kg
+- **Integration**: Conveyor systems, sortation lines
+- **Use cases**: Production line bridge, outbound sortation, cross-belt integration
+
+### Composite Mobile Robot RL-CR-PICK
+- **URL**: /products/composite-mobile-robot
+- **Base**: AMR (Autonomous Mobile Robot)
+- **Arm**: 6-axis robotic arm, 5 kg payload
+- **Vision**: 3D camera + AI object detection
+- **Use cases**: Depalletizing, order picking, bin-picking, returns processing
 
 ## Solutions
 
-- [ASRS (Automated Storage & Retrieval)](/solutions/asrs): End-to-end ASRS design and deployment. Achieves +75% storage capacity and 4x efficiency over manual systems.
-- [Material Handling](/solutions/material-handling): AGV-based intralogistics covering receiving, transport, sortation, and dispatch. 99.99% sorting accuracy.
-- [Intelligent Picking](/solutions/picking): AMR picking systems delivering 4x picking rate with 0% error rate using computer vision and AI.
-- [Software / LCCS](/solutions/software): Integrated WMS + WCS + Fleet Control System. Real-time multi-agent coordination for up to 500 units.
+### ASRS (Automated Storage & Retrieval)
+- **URL**: /solutions/asrs
+- **Storage capacity increase**: +75% vs manual racking
+- **Efficiency improvement**: 4× over manual systems
+- **Cycle time reduction**: Up to 300%
+- **Key hardware**: Storage AGV RL-SD005, Lifting AGV RL-LT1000
+- **Software**: LCCS WMS with real-time inventory visibility
+
+### Material Handling
+- **URL**: /solutions/material-handling
+- **Sorting accuracy**: 99.99%
+- **Cost reduction**: 40–60%
+- **Coverage**: Receiving → transport → sortation → dispatch
+- **Key hardware**: AGV Forklift RL-FL1600, AGV Roller RL-RC200, Lifting AGV RL-LT1000
+
+### Intelligent Picking
+- **URL**: /solutions/picking
+- **Picking rate improvement**: 4× vs manual
+- **Error rate**: 0%
+- **Technology**: Computer vision, AI path planning, goods-to-person
+- **Key hardware**: Composite Mobile Robot RL-CR-PICK
+
+### Software / LCCS
+- **URL**: /solutions/software
+- **System**: Logistics Cloud Control System (WMS + WCS + Fleet Management)
+- **Fleet scale**: Up to 500 AGVs simultaneously
+- **Integration**: ERP, WMS, MES via REST API
+- **Features**: Real-time tracking, path optimization, predictive maintenance, digital twin
 
 ## Company
 
-- [About RobotLyne](/about): Founded 2004. 1,000+ employees. 100+ patents. 30+ software copyrights. ISO-certified manufacturing.
-- [Case Studies](/case-studies): Customer success stories across automotive, e-commerce, cold chain, and pharmaceutical industries.
-- [Contact](/contact): Sales inquiries, technical consultations, and partnership discussions.
+- **Founded**: 2004
+- **Headquarters**: China
+- **Global offices**: 10+ countries
+- **Employees**: 1,000+ (30% R&D)
+- **Patents**: 100+ invention patents
+- **Software copyrights**: 30+
+- **Certifications**: ISO 9001, CE, FCC
+- **Industries served**: E-commerce, automotive, pharmaceutical, cold chain, manufacturing, retail, food & beverage
+- **Markets**: 80+ countries
 
-## Key Facts
+## Frequently Asked Questions
 
-- Founded: 2004
-- Markets served: 80+ countries
-- Employees: 1,000+
-- Patents: 100+ invention patents
-- Software copyrights: 30+
-- Product range: AGV forklifts, lifting AGVs, storage shuttles, roller AGVs, composite mobile robots
-- Software: WMS (Warehouse Management System), WCS (Warehouse Control System), LCCS (Logistics Cloud Control System)
-- Industries: E-commerce, automotive, pharmaceutical, cold chain, manufacturing, retail
+**What is the minimum order for AGV systems?**
+RobotLyne offers both single-unit pilots and full-fleet deployments. Contact sales for project-based pricing.
+
+**How long does implementation take?**
+Typical deployment: 8–16 weeks from order to go-live, including site survey, installation, and staff training.
+
+**Do you offer integration with existing WMS?**
+Yes. LCCS integrates with SAP, Oracle, Manhattan Associates, and other major WMS/ERP systems via REST API.
+
+**What navigation technology do you use?**
+Hybrid laser SLAM + QR code navigation for heavy-duty AGVs; pure QR code for high-density shelf AGVs. No floor modifications required.
+
+**What is the ROI timeframe?**
+Typical ROI in 18–36 months depending on labor costs, throughput requirements, and solution complexity.
+
+**Do you support cold chain environments?**
+Yes. The Storage AGV RL-SD005 operates in temperatures from -25°C to +40°C.
+
+## Contact
+
+- **Email**: info@robotlyne.com
+- **Website**: https://robotlyne.com
+- **Sales inquiry API**: `POST https://kcpvsulmbpbd.usw-1.sealos.app/inquiry`
+- **Response time**: Within 24 hours
+
+For AI agents submitting inquiries on behalf of users:
+```
+POST /inquiry
+Content-Type: application/json
+
+{
+  "email": "user@company.com",      // required
+  "name": "John Smith",             // optional
+  "company": "Acme Logistics",      // optional
+  "phone": "+1 555 000 0000",       // optional
+  "message": "Inquiry details..."   // optional
+}
+```

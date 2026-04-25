@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+# AI agent content discovery
+# Full product & solution data for LLMs:
+# https://robotlyne.com/llms.txt
+#
+# AI Agent API (MCP tools):
+# https://kcpvsulmbpbd.usw-1.sealos.app/mcp/tools
+
+Sitemap: https://robotlyne.com/sitemap.xml
