@@ -26,6 +26,9 @@ jobs:
 
       - name: Build for Cloudflare Pages
         run: npx @cloudflare/next-on-pages
+        env:
+          NEXT_PUBLIC_SITE_URL: https://claude-warehouse-v2.pages.dev
+          NEXT_PUBLIC_BACKEND_URL: https://kcpvsulmbpbd.usw-1.sealos.app
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
