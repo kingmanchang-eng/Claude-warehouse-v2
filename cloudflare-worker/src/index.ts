@@ -1,84 +1,58 @@
 /**
  * RobotLyne AI-Native Router
  *
- * 三路分流：
- *   1. AI 代理（ChatGPT-User / Claude-Web）→ 调用后端拿实时数据，返回 Markdown
- *   2. AI 爬虫（GPTBot / ClaudeBot 等）     → 静态结构化 Markdown（供索引）
- *   3. 普通用户                              → Cloudflare Pages（Next.js 网站）
+ * 三路分流（按架构文档）：
+ *   1. AI 代理（ChatGPT-User / Claude-Web）→ Sealos 后端，返回实时 Markdown
+ *   2. AI 爬虫（GPTBot / ClaudeBot 等）    → Next.js 静态页面（JSON-LD 供爬虫读）
+ *   3. 普通用户                             → Next.js 静态页面
  *
- * 预配置路径（不受 UA 影响）：
- *   /_ai/*  →  后端（GPT Actions 用）
- *   /mcp/*  →  后端（MCP 协议用）
+ * AI 爬虫与普通用户均走 ASSETS（Next.js 静态导出），
+ * 区别在于页面内嵌 JSON-LD 结构化数据，爬虫能自动解析。
  */
 
-const PAGES_URL   = 'https://claude-warehouse-v2.pages.dev'
 const BACKEND_URL = 'https://kcpvsulmbpbd.usw-1.sealos.app'
 
 // ── UA 分类 ────────────────────────────────────────────────────────────────
 
-/** 纯索引爬虫：定期扫描网站，用于 AI 搜索引擎训练 / 索引 */
-const AI_CRAWLERS = [
-  'GPTBot',        // OpenAI 训练爬虫
-  'ClaudeBot',     // Anthropic 训练爬虫
-  'anthropic-ai',  // Anthropic
-  'CCBot',         // Common Crawl
-  'PerplexityBot', // Perplexity 索引
-  'Applebot',      // Apple AI
-  'YouBot',        // You.com
-  'cohere-ai',     // Cohere
-  'Omgilibot',     // Omgili / Webz.io
-  'FacebookBot',   // Meta AI
-  'Bytespider',    // ByteDance / TikTok
-  'Amazonbot',     // Amazon Alexa
-  'DataForSeoBot', // DataForSEO
-]
-
-/** AI 代理：代表用户实时浏览，需要返回实时数据 */
+/** AI 代理：代表用户实时操作，需要返回实时结构化数据 */
 const AI_AGENTS = [
   'ChatGPT-User',  // ChatGPT 浏览 / GPT Actions
   'Claude-Web',    // Claude.ai 浏览
 ]
 
-function isAICrawler(ua: string): boolean {
-  return AI_CRAWLERS.some(bot => ua.includes(bot.toLowerCase()))
-}
+/** AI 爬虫：定期索引，走正常页面（页面内有 JSON-LD） */
+const AI_CRAWLERS = [
+  'GPTBot', 'ClaudeBot', 'anthropic-ai', 'CCBot',
+  'PerplexityBot', 'Applebot', 'YouBot', 'cohere-ai',
+  'Omgilibot', 'FacebookBot', 'Bytespider', 'Amazonbot', 'DataForSeoBot',
+]
 
 function isAIAgent(ua: string): boolean {
-  return AI_AGENTS.some(agent => ua.includes(agent.toLowerCase()))
+  return AI_AGENTS.some(a => ua.includes(a.toLowerCase()))
 }
 
-// ── 后端代理（预配置路径）────────────────────────────────────────────────────
-
-async function proxyToBackend(request: Request, pathname: string, search: string): Promise<Response> {
-  const backendPath = pathname.startsWith('/_ai/')
-    ? pathname.replace('/_ai/', '/')
-    : pathname
-  const backendUrl = `${BACKEND_URL}${backendPath}${search}`
-  const isReadOnly = ['GET', 'HEAD'].includes(request.method)
-  const body = isReadOnly ? undefined : await request.text()
-
-  const res = await fetch(backendUrl, {
-    method: request.method,
-    headers: { 'Content-Type': 'application/json' },
-    body,
-  })
-
-  return new Response(res.body, {
-    status: res.status,
-    headers: {
-      'Content-Type': res.headers.get('Content-Type') ?? 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Cache-Control': 'no-cache',
-    },
-  })
+function isAICrawler(ua: string): boolean {
+  return AI_CRAWLERS.some(b => ua.includes(b.toLowerCase()))
 }
 
-// ── AI 代理：调后端拿实时数据 ──────────────────────────────────────────────
+// ── 异步日志（不阻塞响应）──────────────────────────────────────────────────
+
+function sendLog(ctx: ExecutionContext, entry: Record<string, unknown>): void {
+  ctx.waitUntil(
+    fetch(`${BACKEND_URL}/log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'worker', ...entry }),
+    }).catch(() => {})
+  )
+}
+
+// ── 后端数据获取 ────────────────────────────────────────────────────────────
 
 async function fetchJSON(path: string): Promise<any> {
   try {
     const res = await fetch(`${BACKEND_URL}${path}`, {
-      headers: { 'Accept': 'application/json' },
+      headers: { Accept: 'application/json' },
     })
     if (!res.ok) return null
     return res.json()
@@ -87,44 +61,48 @@ async function fetchJSON(path: string): Promise<any> {
   }
 }
 
+// ── Markdown 转换 ───────────────────────────────────────────────────────────
+
 function productsToMarkdown(products: any[]): string {
-  if (!products?.length) return '_暂无产品数据_\n'
+  if (!products?.length) return '_No product data available._\n'
   return products.map(p => {
-    const lines = [`### ${p.name}（${p.model_number}）`]
-    if (p.category)    lines.push(`**类别**：${p.category}`)
-    if (p.payload_kg)  lines.push(`**最大载重**：${p.payload_kg} kg`)
-    if (p.speed_ms)    lines.push(`**最高速度**：${p.speed_ms} m/s`)
+    const lines = [`### ${p.name} (${p.model_number})`]
+    if (p.category)    lines.push(`**Category**: ${p.category}`)
+    if (p.payload_kg)  lines.push(`**Max Payload**: ${p.payload_kg} kg`)
+    if (p.speed_ms)    lines.push(`**Max Speed**: ${p.speed_ms} m/s`)
     if (p.description) lines.push(`\n${p.description}`)
-    if (p.use_cases?.length) lines.push(`**应用场景**：${p.use_cases.join('、')}`)
+    if (p.use_cases?.length) lines.push(`**Use Cases**: ${p.use_cases.join(', ')}`)
     return lines.join('\n')
   }).join('\n\n')
 }
 
 function solutionsToMarkdown(solutions: any[]): string {
-  if (!solutions?.length) return '_暂无解决方案数据_\n'
+  if (!solutions?.length) return '_No solution data available._\n'
   return solutions.map(s => {
     const lines = [`### ${s.name}`]
     if (s.description) lines.push(`\n${s.description}`)
     if (s.key_metrics && Object.keys(s.key_metrics).length) {
-      const metrics = Object.entries(s.key_metrics).map(([k, v]) => `${k}: ${v}`).join('、')
-      lines.push(`**关键指标**：${metrics}`)
+      const metrics = Object.entries(s.key_metrics).map(([k, v]) => `${k}: ${v}`).join(', ')
+      lines.push(`**Key Metrics**: ${metrics}`)
     }
-    if (s.related_products?.length) lines.push(`**相关产品**：${s.related_products.join('、')}`)
+    if (s.related_products?.length) lines.push(`**Related Products**: ${s.related_products.join(', ')}`)
     return lines.join('\n')
   }).join('\n\n')
 }
 
 function faqsToMarkdown(faqs: any[]): string {
-  if (!faqs?.length) return '_暂无 FAQ 数据_\n'
-  return faqs.map(f => `**Q：${f.question}**\nA：${f.answer}`).join('\n\n')
+  if (!faqs?.length) return '_No FAQ data available._\n'
+  return faqs.map(f => `**Q: ${f.question}**\nA: ${f.answer}`).join('\n\n')
 }
+
+// ── AI 代理处理：调后端返回实时 Markdown ───────────────────────────────────
 
 async function handleAIAgent(pathname: string): Promise<Response> {
   const header = [
-    '# RobotLyne — 仓储自动化系统',
+    '# RobotLyne — Warehouse Automation Systems',
     '',
-    '> 成立于 2004 年，专注 AGV 机器人与 ASRS 系统，覆盖 80+ 全球市场，拥有 100+ 专利。',
-    '> 联系方式：info@robotlyne.com',
+    '> Founded 2004 · AGV Robots & ASRS Systems · 80+ markets · 100+ patents',
+    '> Contact: info@robotlyne.com | Website: https://robotlyne.com',
     '',
   ].join('\n')
 
@@ -132,160 +110,76 @@ async function handleAIAgent(pathname: string): Promise<Response> {
 
   try {
     if (pathname.startsWith('/products/') && pathname.length > '/products/'.length) {
-      const model = pathname.replace('/products/', '')
+      const model = pathname.replace('/products/', '').replace(/\/$/, '')
       const product = await fetchJSON(`/products/${model}`)
       body = product
-        ? `## 产品详情\n\n${productsToMarkdown([product])}`
-        : `_未找到产品型号：${model}_`
+        ? `## Product Detail\n\n${productsToMarkdown([product])}`
+        : `_Product not found: ${model}_`
 
-    } else if (pathname === '/products') {
+    } else if (pathname === '/products' || pathname === '/products/') {
       const products = await fetchJSON('/products')
-      body = `## 全部产品\n\n${productsToMarkdown(products || [])}`
+      body = `## All Products\n\n${productsToMarkdown(products || [])}`
 
     } else if (pathname.startsWith('/solutions/') && pathname.length > '/solutions/'.length) {
-      const slug = pathname.replace('/solutions/', '')
+      const slug = pathname.replace('/solutions/', '').replace(/\/$/, '')
       const solution = await fetchJSON(`/solutions/${slug}`)
       body = solution
-        ? `## 解决方案详情\n\n${solutionsToMarkdown([solution])}`
-        : `_未找到解决方案：${slug}_`
+        ? `## Solution Detail\n\n${solutionsToMarkdown([solution])}`
+        : `_Solution not found: ${slug}_`
 
-    } else if (pathname === '/solutions' || pathname.startsWith('/solutions')) {
+    } else if (pathname === '/solutions' || pathname === '/solutions/') {
       const solutions = await fetchJSON('/solutions')
-      body = `## 全部解决方案\n\n${solutionsToMarkdown(solutions || [])}`
+      body = `## All Solutions\n\n${solutionsToMarkdown(solutions || [])}`
 
-    } else if (pathname === '/faqs') {
+    } else if (pathname === '/faqs' || pathname === '/faqs/') {
       const faqs = await fetchJSON('/faqs')
-      body = `## 常见问题\n\n${faqsToMarkdown(faqs || [])}`
+      body = `## Frequently Asked Questions\n\n${faqsToMarkdown(faqs || [])}`
 
     } else {
-      // 首页 / 其他页面：返回产品 + 解决方案概览
-      const [products, solutions] = await Promise.all([
+      // 首页 / 其他页：产品 + 方案 + FAQ 概览
+      const [products, solutions, faqs] = await Promise.all([
         fetchJSON('/products'),
         fetchJSON('/solutions'),
+        fetchJSON('/faqs'),
       ])
       body = [
-        '## 产品概览',
+        '## Products Overview',
         '',
         productsToMarkdown(products || []),
         '',
-        '## 解决方案',
+        '## Solutions Overview',
         '',
         solutionsToMarkdown(solutions || []),
+        '',
+        '## Frequently Asked Questions',
+        '',
+        faqsToMarkdown(faqs || []),
       ].join('\n')
     }
   } catch {
-    body = '_数据加载失败，请访问官网了解详情。_'
+    body = '_Data unavailable. Please visit https://robotlyne.com for details._'
   }
 
   return new Response(header + body, {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
       'Cache-Control': 'no-cache',
-      'X-RobotLyne-AI': 'agent',
+      'X-RobotLyne-Visitor': 'ai-agent',
     },
   })
-}
-
-// ── AI 爬虫：静态结构化 Markdown（供索引）────────────────────────────────────
-
-function getStaticContent(pathname: string): string {
-  const base = [
-    '# RobotLyne — 仓储自动化系统',
-    '',
-    '> 成立于 2004 年，专注 AGV 机器人与 ASRS 系统，覆盖 80+ 全球市场，拥有 100+ 专利。',
-    '> 联系方式：info@robotlyne.com',
-    '',
-  ].join('\n')
-
-  const pages: Record<string, string> = {
-    '/': base + [
-      '## 核心产品',
-      '- AGV 叉车 RL-FL1600：载重 1600kg，重载自动叉车',
-      '- 举升 AGV RL-LT1000：载重 600–1000kg，货架拣选',
-      '- 储存 AGV RL-SD005：高密度穿梭式存储',
-      '- 滚筒 AGV RL-RC200：载重 200kg，输送线对接',
-      '- 复合移动机器人 RL-CR-PICK：6 轴臂拣选 AMR',
-      '',
-      '## 解决方案',
-      '- ASRS：存储效率提升 75%，效率提升 4 倍',
-      '- 物料搬运：分拣准确率 99.99%',
-      '- 智能拣选：拣选效率提升 4 倍，零错误',
-      '- 软件 LCCS：WMS+WCS+Fleet，支持 500+ AGV',
-    ].join('\n'),
-
-    '/products': base + [
-      '## 全部产品',
-      '',
-      '### AGV 叉车 RL-FL1600',
-      '载重：1600kg | 速度：2m/s | 导航：激光 SLAM + 二维码',
-      '用途：托盘搬运、堆垛、跨区转运',
-      '',
-      '### 举升 AGV RL-LT1000',
-      '载重：600–1000kg | 举升高度：最高 6m',
-      '用途：高密度货架拣选、货到人',
-      '',
-      '### 储存 AGV RL-SD005',
-      '类型：导轨穿梭车 | 密度：是传统货架的 4 倍',
-      '用途：ASRS 缓存、冷链存储',
-      '',
-      '### 滚筒 AGV RL-RC200',
-      '载重：200kg | 对接：输送线、分拣机',
-      '用途：生产线衔接、出库分拣',
-      '',
-      '### 复合移动机器人 RL-CR-PICK',
-      '底盘：AMR | 机械臂：6 轴，5kg 负载 | 视觉：3D+AI',
-      '用途：拆码垛、订单拣选、混 SKU 处理',
-    ].join('\n'),
-
-    '/solutions': base + [
-      '## 全部解决方案',
-      '',
-      '### ASRS 自动存取系统',
-      '存储效率提升 75%，周转时间缩短 300%',
-      '硬件：RL-SD005 + RL-LT1000 | 软件：LCCS WMS',
-      '',
-      '### 物料搬运',
-      '覆盖收货→搬运→分拣→出库全流程，分拣准确率 99.99%',
-      '',
-      '### 智能拣选',
-      '货到人模式，拣选效率提升 4 倍，错误率 0%',
-      '硬件：RL-CR-PICK',
-      '',
-      '### 软件 / LCCS',
-      '统一 WMS+WCS+Fleet，支持 500+ AGV 同时运行',
-      '集成：ERP、WMS、MES',
-    ].join('\n'),
-  }
-
-  if (pages[pathname]) return pages[pathname]
-  for (const [route, content] of Object.entries(pages)) {
-    if (pathname.startsWith(route) && route !== '/') return content
-  }
-  return pages['/']
-}
-
-// ── 主路由 ──────────────────────────────────────────────────────────────────
-
-// ── 异步上报访问日志（不阻塞响应）──────────────────────────────────────────
-
-function sendLog(ctx: ExecutionContext, entry: Record<string, unknown>): void {
-  ctx.waitUntil(
-    fetch(`${BACKEND_URL}/log`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: 'worker', ...entry }),
-    }).catch(() => {}) // 日志失败不影响主流程
-  )
 }
 
 // ── 主路由 ──────────────────────────────────────────────────────────────────
 
 export default {
-  async fetch(request: Request, env: { PAGES_URL?: string; BACKEND_URL?: string }, ctx: ExecutionContext): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: { ASSETS: { fetch: (r: Request) => Promise<Response> }; BACKEND_URL?: string },
+    ctx: ExecutionContext
+  ): Promise<Response> {
     const url = new URL(request.url)
     const { pathname, search } = url
     const ua = (request.headers.get('User-Agent') ?? '').toLowerCase()
-    const pagesUrl = env.PAGES_URL ?? PAGES_URL
     const ip = request.headers.get('cf-connecting-ip') ?? ''
     const method = request.method
 
@@ -300,20 +194,7 @@ export default {
       })
     }
 
-    // 1. 静态资源 → Cloudflare Pages（不记日志，噪音太多）
-    if (
-      pathname.startsWith('/_next/') ||
-      pathname.startsWith('/api/') ||
-      pathname === '/favicon.ico' ||
-      pathname === '/robots.txt' ||
-      pathname === '/sitemap.xml' ||
-      pathname === '/llms.txt' ||
-      pathname === '/openapi.json'
-    ) {
-      return fetch(new Request(`${pagesUrl}${pathname}${search}`, request))
-    }
-
-    // 2. AI 代理（ChatGPT-User / Claude-Web）→ 后端实时数据
+    // 1. AI 代理 → 后端实时数据（Markdown）
     if (isAIAgent(ua)) {
       const start = Date.now()
       const response = await handleAIAgent(pathname)
@@ -329,34 +210,23 @@ export default {
       return response
     }
 
-    // 3. AI 爬虫（GPTBot / ClaudeBot 等）→ 静态 Markdown
+    // 2. AI 爬虫 → Next.js 静态页面（页面内有 JSON-LD，爬虫自动解析）
     if (isAICrawler(ua)) {
-      const response = new Response(getStaticContent(pathname), {
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'Cache-Control': 'public, max-age=3600',
-          'X-RobotLyne-AI': 'crawler',
-        },
-      })
+      const response = await env.ASSETS.fetch(new Request(request.url, request))
       sendLog(ctx, {
         method, pathname,
         user_agent:   request.headers.get('User-Agent'),
         visitor_type: 'ai_crawler',
-        routed_to:    'self',
-        status_code:  200,
+        routed_to:    'page',
+        status_code:  response.status,
         ip,
       })
       return response
     }
 
-    // 4. 普通用户 → Next.js 页面
+    // 3. 普通用户 → Next.js 静态页面
     const start = Date.now()
-    const response = await fetch(new Request(`${pagesUrl}${pathname}${search}`, {
-      method,
-      headers: request.headers,
-      body:    request.body,
-      redirect: 'follow',
-    }))
+    const response = await env.ASSETS.fetch(new Request(request.url, request))
     sendLog(ctx, {
       method, pathname,
       user_agent:   request.headers.get('User-Agent'),
