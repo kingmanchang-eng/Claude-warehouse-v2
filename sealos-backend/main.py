@@ -4,6 +4,8 @@ Handles AI agent requests: RAG search, product queries, MCP tool calls, inquiry 
 """
 import os
 import json
+import time
+import psycopg2
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -13,7 +15,7 @@ from dotenv import load_dotenv
 from models import (
     InquiryRequest, InquiryResponse,
     ProductResult, SolutionResult, FAQResult,
-    SearchResponse,
+    SearchResponse, LogEntry,
 )
 from database import get_supabase
 from rag import semantic_search
@@ -21,9 +23,43 @@ from rag import semantic_search
 load_dotenv()
 
 
+def run_migrations():
+    """建表：access_logs（仅在 DATABASE_URL 存在时执行）"""
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        print("⚠️  DATABASE_URL 未设置，跳过建表")
+        return
+    try:
+        conn = psycopg2.connect(database_url)
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS access_logs (
+                id           SERIAL PRIMARY KEY,
+                timestamp    TIMESTAMPTZ DEFAULT NOW(),
+                source       VARCHAR(20) NOT NULL,
+                method       VARCHAR(10),
+                pathname     TEXT,
+                user_agent   TEXT,
+                visitor_type VARCHAR(20),
+                routed_to    VARCHAR(20),
+                status_code  INTEGER,
+                duration_ms  INTEGER,
+                ip           TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_access_logs_timestamp
+                ON access_logs (timestamp DESC);
+        """)
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("✅ access_logs 表已就绪")
+    except Exception as e:
+        print(f"⚠️  建表失败：{e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Verify DB connection on startup
+    run_migrations()
     db = get_supabase()
     db.table("products").select("id").limit(1).execute()
     print("✅ Supabase connected")
@@ -43,6 +79,37 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ──────────────────────────────────────────────
+# 后端请求日志中间件
+# ──────────────────────────────────────────────
+
+@app.middleware("http")
+async def log_backend_requests(request: Request, call_next):
+    # 跳过日志接口本身，避免死循环
+    if request.url.path in ("/log", "/logs"):
+        return await call_next(request)
+
+    start = time.time()
+    response = await call_next(request)
+    duration = int((time.time() - start) * 1000)
+
+    try:
+        db = get_supabase()
+        db.table("access_logs").insert({
+            "source":      "backend",
+            "method":      request.method,
+            "pathname":    request.url.path,
+            "user_agent":  request.headers.get("user-agent"),
+            "status_code": response.status_code,
+            "duration_ms": duration,
+            "ip":          request.headers.get("x-forwarded-for") or request.client.host,
+        }).execute()
+    except Exception:
+        pass  # 日志写入失败不影响正常响应
+
+    return response
 
 
 # ──────────────────────────────────────────────
@@ -146,6 +213,38 @@ async def submit_inquiry(body: InquiryRequest):
     result = db.table("inquiries").insert(body.model_dump()).execute()
     row = result.data[0]
     return InquiryResponse(id=row["id"], email=row["email"], created_at=row["created_at"])
+
+
+# ──────────────────────────────────────────────
+# 访问日志
+# ──────────────────────────────────────────────
+
+@app.post("/log")
+async def receive_log(entry: LogEntry):
+    """接收 Cloudflare Worker 发来的访问日志"""
+    try:
+        db = get_supabase()
+        db.table("access_logs").insert(entry.model_dump(exclude_none=True)).execute()
+    except Exception:
+        pass
+    return {"ok": True}
+
+
+@app.get("/logs")
+async def get_logs(
+    limit: int = 100,
+    source: str | None = None,
+    visitor_type: str | None = None,
+):
+    """查询合并后的访问日志"""
+    db = get_supabase()
+    q = db.table("access_logs").select("*").order("timestamp", desc=True).limit(limit)
+    if source:
+        q = q.eq("source", source)
+    if visitor_type:
+        q = q.eq("visitor_type", visitor_type)
+    result = q.execute()
+    return {"total": len(result.data), "logs": result.data}
 
 
 # ──────────────────────────────────────────────

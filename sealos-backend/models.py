@@ -62,6 +62,18 @@ class SearchResponse(BaseModel):
     total: int
 
 
+class LogEntry(BaseModel):
+    source: str                          # 'worker' | 'backend'
+    method: Optional[str] = None
+    pathname: Optional[str] = None
+    user_agent: Optional[str] = None
+    visitor_type: Optional[str] = None  # 'human' | 'ai_agent' | 'ai_crawler' | 'mcp' | 'static'
+    routed_to: Optional[str] = None     # 'page' | 'backend' | 'self'
+    status_code: Optional[int] = None
+    duration_ms: Optional[int] = None
+    ip: Optional[str] = None
+
+
 class MCPExecuteRequest(BaseModel):
     tool: str = Field(..., description="Tool name: search | list_products | get_product | list_solutions | list_faqs | submit_inquiry")
     args: dict = Field(default={}, description="Tool arguments as key-value pairs")

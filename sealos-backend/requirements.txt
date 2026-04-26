@@ -5,3 +5,4 @@ google-genai>=1.0.0
 pydantic==2.10.3
 httpx>=0.26,<0.28
 python-dotenv==1.0.1
+psycopg2-binary==2.9.10

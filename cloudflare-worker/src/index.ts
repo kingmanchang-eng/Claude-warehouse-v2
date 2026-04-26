@@ -266,15 +266,31 @@ function getStaticContent(pathname: string): string {
 
 // ── 主路由 ──────────────────────────────────────────────────────────────────
 
+// ── 异步上报访问日志（不阻塞响应）──────────────────────────────────────────
+
+function sendLog(ctx: ExecutionContext, entry: Record<string, unknown>): void {
+  ctx.waitUntil(
+    fetch(`${BACKEND_URL}/log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'worker', ...entry }),
+    }).catch(() => {}) // 日志失败不影响主流程
+  )
+}
+
+// ── 主路由 ──────────────────────────────────────────────────────────────────
+
 export default {
-  async fetch(request: Request, env: { PAGES_URL?: string; BACKEND_URL?: string }): Promise<Response> {
+  async fetch(request: Request, env: { PAGES_URL?: string; BACKEND_URL?: string }, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
     const { pathname, search } = url
     const ua = (request.headers.get('User-Agent') ?? '').toLowerCase()
     const pagesUrl = env.PAGES_URL ?? PAGES_URL
+    const ip = request.headers.get('cf-connecting-ip') ?? ''
+    const method = request.method
 
     // CORS preflight
-    if (request.method === 'OPTIONS') {
+    if (method === 'OPTIONS') {
       return new Response(null, {
         headers: {
           'Access-Control-Allow-Origin': '*',
@@ -284,12 +300,7 @@ export default {
       })
     }
 
-    // 1. MCP 协议路径 → 后端（Claude Desktop 等 MCP 客户端，UA 不可识别）
-    if (pathname === '/mcp' || pathname.startsWith('/mcp/')) {
-      return proxyToBackend(request, pathname, search)
-    }
-
-    // 2. 静态资源 → Cloudflare Pages
+    // 1. 静态资源 → Cloudflare Pages（不记日志，噪音太多）
     if (
       pathname.startsWith('/_next/') ||
       pathname.startsWith('/api/') ||
@@ -302,28 +313,59 @@ export default {
       return fetch(new Request(`${pagesUrl}${pathname}${search}`, request))
     }
 
-    // 3. AI 代理（ChatGPT-User / Claude-Web）→ 后端实时数据
+    // 2. AI 代理（ChatGPT-User / Claude-Web）→ 后端实时数据
     if (isAIAgent(ua)) {
-      return handleAIAgent(pathname)
+      const start = Date.now()
+      const response = await handleAIAgent(pathname)
+      sendLog(ctx, {
+        method, pathname,
+        user_agent:   request.headers.get('User-Agent'),
+        visitor_type: 'ai_agent',
+        routed_to:    'backend',
+        status_code:  response.status,
+        duration_ms:  Date.now() - start,
+        ip,
+      })
+      return response
     }
 
-    // 4. AI 爬虫（GPTBot / ClaudeBot 等）→ 静态 Markdown
+    // 3. AI 爬虫（GPTBot / ClaudeBot 等）→ 静态 Markdown
     if (isAICrawler(ua)) {
-      return new Response(getStaticContent(pathname), {
+      const response = new Response(getStaticContent(pathname), {
         headers: {
           'Content-Type': 'text/plain; charset=utf-8',
           'Cache-Control': 'public, max-age=3600',
           'X-RobotLyne-AI': 'crawler',
         },
       })
+      sendLog(ctx, {
+        method, pathname,
+        user_agent:   request.headers.get('User-Agent'),
+        visitor_type: 'ai_crawler',
+        routed_to:    'self',
+        status_code:  200,
+        ip,
+      })
+      return response
     }
 
-    // 5. 普通用户 → Next.js 页面
-    return fetch(new Request(`${pagesUrl}${pathname}${search}`, {
-      method:  request.method,
+    // 4. 普通用户 → Next.js 页面
+    const start = Date.now()
+    const response = await fetch(new Request(`${pagesUrl}${pathname}${search}`, {
+      method,
       headers: request.headers,
       body:    request.body,
       redirect: 'follow',
     }))
+    sendLog(ctx, {
+      method, pathname,
+      user_agent:   request.headers.get('User-Agent'),
+      visitor_type: 'human',
+      routed_to:    'page',
+      status_code:  response.status,
+      duration_ms:  Date.now() - start,
+      ip,
+    })
+    return response
   },
 }
