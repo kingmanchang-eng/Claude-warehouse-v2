@@ -47,11 +47,13 @@ export default function ContactModal() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email:   form.email,
-          name:    form.name    || undefined,
-          company: form.company || undefined,
-          phone:   form.phone   || undefined,
-          message: form.message || undefined,
+          email:        form.email,
+          name:         form.name    || undefined,
+          company:      form.company || undefined,
+          phone:        form.phone   || undefined,
+          message:      form.message || undefined,
+          source:       'modal',
+          landing_page: typeof window !== 'undefined' ? window.location.href : undefined,
         }),
       })
 

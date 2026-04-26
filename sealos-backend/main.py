@@ -5,7 +5,9 @@ Handles AI agent requests: RAG search, product queries, MCP tool calls, inquiry 
 import os
 import json
 import time
+import resend
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -164,18 +166,154 @@ async def list_faqs(category: str | None = None):
 
 
 # ──────────────────────────────────────────────
+# Email helpers
+# ──────────────────────────────────────────────
+
+def detect_device(ua: str) -> str:
+    ua = ua.lower()
+    if any(x in ua for x in ['ipad', 'tablet', 'kindle']):
+        return 'Tablet'
+    if any(x in ua for x in ['mobile', 'android', 'iphone', 'ipod', 'blackberry', 'windows phone']):
+        return 'Mobile'
+    return 'Desktop'
+
+
+def build_inquiry_email(body: InquiryRequest, ip: str, country: str, device: str, user_agent: str, visits: list) -> str:
+    name = body.name or f"{body.first_name or ''} {body.last_name or ''}".strip() or "N/A"
+    now  = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+
+    # Visit history rows
+    if visits:
+        rows = "".join(f"""
+          <tr>
+            <td style="padding:6px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px;">{v.get('timestamp','')[:19].replace('T',' ')}</td>
+            <td style="padding:6px 12px;border-bottom:1px solid #1e3a5f;color:#e2e8f0;font-size:12px;">{v.get('pathname','')}</td>
+            <td style="padding:6px 12px;border-bottom:1px solid #1e3a5f;font-size:12px;"><span style="background:#0f2d4a;color:#38bdf8;padding:2px 8px;border-radius:4px;font-size:11px;">{v.get('visitor_type','')}</span></td>
+          </tr>""" for v in visits)
+        history_html = f"""<table style="width:100%;border-collapse:collapse;margin-top:8px;">
+          <tr style="background:#0a1f38;">
+            <th style="padding:8px 12px;text-align:left;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em;">Time</th>
+            <th style="padding:8px 12px;text-align:left;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em;">Page</th>
+            <th style="padding:8px 12px;text-align:left;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.05em;">Type</th>
+          </tr>{rows}</table>"""
+    else:
+        history_html = '<p style="color:#64748b;font-size:13px;margin:0;">No prior visits recorded</p>'
+
+    extra = ""
+    if body.country_selected:
+        extra += f'<tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:140px;">Country (Form)</td><td style="padding:8px 0;color:#e2e8f0;font-size:13px;">{body.country_selected}</td></tr>'
+    if body.industry:
+        extra += f'<tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Industry</td><td style="padding:8px 0;color:#e2e8f0;font-size:13px;">{body.industry}</td></tr>'
+    if body.project_type:
+        extra += f'<tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Project Type</td><td style="padding:8px 0;color:#e2e8f0;font-size:13px;">{body.project_type}</td></tr>'
+
+    ua_short = (user_agent[:120] + "…") if len(user_agent) > 120 else user_agent
+
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#060f1e;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<div style="max-width:640px;margin:0 auto;padding:32px 16px;">
+
+  <div style="background:linear-gradient(135deg,#0a1628,#0f2040);border:1px solid #1e3a5f;border-radius:12px;padding:28px 32px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+      <div style="width:8px;height:8px;background:#00daf3;border-radius:50%;"></div>
+      <span style="color:#64748b;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;">New Inquiry — RobotLyne</span>
+    </div>
+    <h1 style="margin:0;color:#e2e8f0;font-size:22px;font-weight:700;">New Form Submission</h1>
+    <p style="margin:6px 0 0;color:#64748b;font-size:13px;">{now}</p>
+  </div>
+
+  <div style="background:#0a1628;border:1px solid #1e3a5f;border-radius:12px;padding:24px 32px;margin-bottom:16px;">
+    <h2 style="margin:0 0 16px;color:#00daf3;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;">Contact Details</h2>
+    <table style="width:100%;border-collapse:collapse;">
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:140px;">Name</td><td style="padding:8px 0;color:#e2e8f0;font-size:13px;font-weight:600;">{name}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Company</td><td style="padding:8px 0;color:#e2e8f0;font-size:13px;">{body.company or 'N/A'}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Email</td><td style="padding:8px 0;"><a href="mailto:{body.email}" style="color:#38bdf8;font-size:13px;">{body.email}</a></td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Phone</td><td style="padding:8px 0;color:#e2e8f0;font-size:13px;">{body.phone or 'N/A'}</td></tr>
+      {extra}
+    </table>
+  </div>
+
+  <div style="background:#0a1628;border:1px solid #1e3a5f;border-radius:12px;padding:24px 32px;margin-bottom:16px;">
+    <h2 style="margin:0 0 12px;color:#00daf3;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;">Message</h2>
+    <p style="margin:0;color:#cbd5e1;font-size:14px;line-height:1.7;white-space:pre-wrap;">{body.message or '(No message provided)'}</p>
+  </div>
+
+  <div style="background:#0a1628;border:1px solid #1e3a5f;border-radius:12px;padding:24px 32px;margin-bottom:16px;">
+    <h2 style="margin:0 0 16px;color:#00daf3;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;">Visit Context</h2>
+    <table style="width:100%;border-collapse:collapse;">
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;width:140px;">Landing Page</td><td style="padding:8px 0;color:#e2e8f0;font-size:13px;">{body.landing_page or 'N/A'}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">IP Address</td><td style="padding:8px 0;color:#e2e8f0;font-size:13px;font-family:monospace;">{ip}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Country</td><td style="padding:8px 0;color:#e2e8f0;font-size:13px;">{country}</td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;">Device</td><td style="padding:8px 0;"><span style="background:#0f2d4a;color:#38bdf8;padding:3px 10px;border-radius:4px;font-size:12px;font-weight:600;">{device}</span></td></tr>
+      <tr><td style="padding:8px 0;color:#64748b;font-size:13px;vertical-align:top;">User Agent</td><td style="padding:8px 0;color:#64748b;font-size:11px;font-family:monospace;word-break:break-all;">{ua_short}</td></tr>
+    </table>
+  </div>
+
+  <div style="background:#0a1628;border:1px solid #1e3a5f;border-radius:12px;padding:24px 32px;margin-bottom:16px;">
+    <h2 style="margin:0 0 12px;color:#00daf3;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;">Visit History (Last 5)</h2>
+    {history_html}
+  </div>
+
+  <p style="text-align:center;color:#334155;font-size:11px;margin:24px 0 0;">RobotLyne Automated Alert · robotlyne.com</p>
+</div>
+</body></html>"""
+
+
+# ──────────────────────────────────────────────
 # Inquiry Submission
 # ──────────────────────────────────────────────
 
 @app.post("/inquiry", response_model=InquiryResponse)
-async def submit_inquiry(body: InquiryRequest):
-    """
-    Submit a sales inquiry from an AI agent.
-    Validates via Pydantic, stores in Supabase.
-    """
+async def submit_inquiry(request: Request, body: InquiryRequest):
+    """Submit a sales inquiry. Stores in Supabase and sends email notification."""
+    # ── Extract metadata from request headers ─────────────────────────────
+    ip      = request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for") or (request.client.host if request.client else "")
+    country = request.headers.get("cf-ipcountry") or "Unknown"
+    ua      = request.headers.get("user-agent") or ""
+    device  = detect_device(ua)
+
+    # ── Fetch last 5 visits for this IP ───────────────────────────────────
+    visits: list = []
+    if ip:
+        try:
+            db = get_supabase()
+            res = db.table("access_logs").select("timestamp,pathname,visitor_type") \
+                    .eq("ip", ip).order("timestamp", desc=True).limit(5).execute()
+            visits = res.data or []
+        except Exception:
+            pass
+
+    # ── Save to Supabase ───────────────────────────────────────────────────
     db = get_supabase()
-    result = db.table("inquiries").insert(body.model_dump()).execute()
+    # Merge first_name/last_name into name if needed
+    db_name = body.name or f"{body.first_name or ''} {body.last_name or ''}".strip() or None
+    db_data = {
+        "name":    db_name,
+        "company": body.company,
+        "email":   body.email,
+        "phone":   body.phone,
+        "message": body.message,
+        "source":  body.source,
+    }
+    result = db.table("inquiries").insert(db_data).execute()
     row = result.data[0]
+
+    # ── Send email via Resend ──────────────────────────────────────────────
+    resend_key = os.getenv("RESEND_API_KEY", "")
+    if resend_key:
+        try:
+            resend.api_key = resend_key
+            display_name = db_name or body.email
+            subject = f"New Inquiry from {display_name}" + (f" — {body.company}" if body.company else "")
+            resend.Emails.send({
+                "from":    "RobotLyne Inquiries <onboarding@resend.dev>",
+                "to":      ["Kingman.chang@gmail.com"],
+                "subject": subject,
+                "html":    build_inquiry_email(body, ip, country, device, ua, visits),
+            })
+        except Exception as e:
+            print(f"⚠️  Resend email failed: {e}")
+
     return InquiryResponse(id=row["id"], email=row["email"], created_at=row["created_at"])
 
 

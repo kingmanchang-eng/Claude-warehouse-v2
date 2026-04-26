@@ -1,4 +1,5 @@
 import JsonLd from '@/components/JsonLd'
+import ContactPageForm from '@/components/ContactPageForm'
 import { orgSchema, breadcrumbSchema, faqSchema } from '@/lib/jsonld'
 
 const CONTACT_FAQS = [
@@ -112,66 +113,7 @@ export default function Contact() {
                 <h2 className="font-display text-4xl font-bold text-on-surface mb-4">Industrial Enquiry</h2>
                 <p className="text-on-surface-variant">Submit your project requirements for a technical feasibility assessment.</p>
               </div>
-              <form className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="font-label text-[10px] uppercase tracking-widest text-outline">First Name</label>
-                    <input className="w-full bg-surface-container p-4 border border-outline-variant/15 focus:ring-0 focus:outline-none border-l-2 border-l-tertiary text-on-surface placeholder:text-outline-variant" placeholder="John" type="text" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="font-label text-[10px] uppercase tracking-widest text-outline">Last Name</label>
-                    <input className="w-full bg-surface-container p-4 border border-outline-variant/15 focus:ring-0 focus:outline-none border-l-2 border-l-tertiary text-on-surface placeholder:text-outline-variant" placeholder="Doe" type="text" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="font-label text-[10px] uppercase tracking-widest text-outline">Company Name</label>
-                    <input className="w-full bg-surface-container p-4 border border-outline-variant/15 focus:ring-0 focus:outline-none border-l-2 border-l-tertiary text-on-surface placeholder:text-outline-variant" placeholder="Enterprise Systems" type="text" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="font-label text-[10px] uppercase tracking-widest text-outline">Email Address</label>
-                    <input className="w-full bg-surface-container p-4 border border-outline-variant/15 focus:ring-0 focus:outline-none border-l-2 border-l-tertiary text-on-surface placeholder:text-outline-variant" placeholder="john@enterprise.com" type="email" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <label className="font-label text-[10px] uppercase tracking-widest text-outline">Country</label>
-                    <select className="w-full bg-surface-container p-4 border border-outline-variant/15 focus:ring-0 focus:outline-none border-l-2 border-l-tertiary text-on-surface appearance-none">
-                      <option>Select Region</option>
-                      <option>China</option>
-                      <option>USA</option>
-                      <option>Germany</option>
-                      <option>Japan</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="font-label text-[10px] uppercase tracking-widest text-outline">Industry</label>
-                    <select className="w-full bg-surface-container p-4 border border-outline-variant/15 focus:ring-0 focus:outline-none border-l-2 border-l-tertiary text-on-surface appearance-none">
-                      <option>Manufacturing</option>
-                      <option>Logistics</option>
-                      <option>Automotive</option>
-                      <option>Healthcare</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="font-label text-[10px] uppercase tracking-widest text-outline">Project Type</label>
-                    <select className="w-full bg-surface-container p-4 border border-outline-variant/15 focus:ring-0 focus:outline-none border-l-2 border-l-tertiary text-on-surface appearance-none">
-                      <option>ASRS</option>
-                      <option>Material Handling</option>
-                      <option>Picking</option>
-                      <option>Software</option>
-                      <option>Other</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="font-label text-[10px] uppercase tracking-widest text-outline">Project Scope / Message</label>
-                  <textarea className="w-full bg-surface-container p-4 border border-outline-variant/15 focus:ring-0 focus:outline-none border-l-2 border-l-tertiary text-on-surface placeholder:text-outline-variant" placeholder="Describe your automation objectives..." rows={4}></textarea>
-                </div>
-                <button className="w-full bg-gradient-to-r from-tertiary to-primary-container text-on-secondary font-headline font-bold uppercase tracking-[0.2em] py-5 rounded-sm hover:opacity-90 active:scale-[0.99] transition-all" type="submit">
-                  Initiate Connection
-                </button>
-              </form>
+              <ContactPageForm />
             </div>
             {/* Map/Visual Side */}
             <div className="lg:w-1/3 flex flex-col gap-6">

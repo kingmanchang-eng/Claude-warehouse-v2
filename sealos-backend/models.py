@@ -4,12 +4,20 @@ from datetime import datetime
 
 
 class InquiryRequest(BaseModel):
+    # Core fields (stored in DB)
     name: Optional[str] = None
     company: Optional[str] = None
     email: str
     phone: Optional[str] = None
     message: Optional[str] = None
-    source: str = "mcp"
+    source: str = "web"
+    # Contact page extra fields (email only)
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    country_selected: Optional[str] = None
+    industry: Optional[str] = None
+    project_type: Optional[str] = None
+    landing_page: Optional[str] = None
 
 
 class InquiryResponse(BaseModel):
