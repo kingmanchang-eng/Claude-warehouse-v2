@@ -194,10 +194,13 @@ export default {
       })
     }
 
+    // 规范化路径：去掉末尾斜杠（/ 除外），统一匹配
+    const cleanPath = pathname.length > 1 ? pathname.replace(/\/$/, '') : pathname
+
     // 1. AI 代理 → 后端实时数据（Markdown）
     if (isAIAgent(ua)) {
       const start = Date.now()
-      const response = await handleAIAgent(pathname)
+      const response = await handleAIAgent(cleanPath)
       sendLog(ctx, {
         method, pathname,
         user_agent:   request.headers.get('User-Agent'),
