@@ -5,7 +5,6 @@ Handles AI agent requests: RAG search, product queries, MCP tool calls, inquiry 
 import os
 import json
 import time
-import psycopg2
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -23,43 +22,8 @@ from rag import semantic_search
 load_dotenv()
 
 
-def run_migrations():
-    """建表：access_logs（仅在 DATABASE_URL 存在时执行）"""
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        print("⚠️  DATABASE_URL 未设置，跳过建表")
-        return
-    try:
-        conn = psycopg2.connect(database_url)
-        cur = conn.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS access_logs (
-                id           SERIAL PRIMARY KEY,
-                timestamp    TIMESTAMPTZ DEFAULT NOW(),
-                source       VARCHAR(20) NOT NULL,
-                method       VARCHAR(10),
-                pathname     TEXT,
-                user_agent   TEXT,
-                visitor_type VARCHAR(20),
-                routed_to    VARCHAR(20),
-                status_code  INTEGER,
-                duration_ms  INTEGER,
-                ip           TEXT
-            );
-            CREATE INDEX IF NOT EXISTS idx_access_logs_timestamp
-                ON access_logs (timestamp DESC);
-        """)
-        conn.commit()
-        cur.close()
-        conn.close()
-        print("✅ access_logs 表已就绪")
-    except Exception as e:
-        print(f"⚠️  建表失败：{e}")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    run_migrations()
     db = get_supabase()
     db.table("products").select("id").limit(1).execute()
     print("✅ Supabase connected")
