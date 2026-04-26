@@ -284,8 +284,8 @@ export default {
       })
     }
 
-    // 1. 预配置路径 → 后端（GPT Actions / MCP，不受 UA 影响）
-    if (pathname.startsWith('/_ai/') || pathname === '/mcp' || pathname.startsWith('/mcp/')) {
+    // 1. MCP 协议路径 → 后端（Claude Desktop 等 MCP 客户端，UA 不可识别）
+    if (pathname === '/mcp' || pathname.startsWith('/mcp/')) {
       return proxyToBackend(request, pathname, search)
     }
 
