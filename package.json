@@ -4,9 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && npm run sync",
-    "build:deploy": "next build && npm run sync && npm run deploy:worker",
+    "build": "next build && npm run sync && npm run generate",
+    "build:deploy": "next build && npm run sync && npm run generate && npm run deploy:worker",
     "sync": "npx ts-node --project tsconfig.scripts.json scripts/sync-content.ts",
+    "extract": "npx ts-node --project tsconfig.scripts.json scripts/extract-content.ts",
+    "generate": "npm run generate:llms && npm run generate:sitemap",
+    "generate:llms": "npx ts-node --project tsconfig.scripts.json scripts/generate-llms.ts",
+    "generate:sitemap": "npx ts-node --project tsconfig.scripts.json scripts/generate-sitemap.ts",
     "deploy:worker": "cd cloudflare-worker && npx wrangler deploy",
     "start": "next start",
     "lint": "next lint"

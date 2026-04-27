@@ -347,6 +347,86 @@ async def receive_log(entry: LogEntry):
     return {"ok": True}
 
 
+# ──────────────────────────────────────────────
+# RAG 向量化触发接口
+# ──────────────────────────────────────────────
+
+@app.post("/vectorize")
+async def trigger_vectorize():
+    """
+    重新向量化所有内容（products/solutions/faqs → pgvector documents 表）。
+    由 GitHub Actions 在每次部署后自动调用，确保 RAG 知识库与最新内容同步。
+    """
+    import asyncio
+    from rag import get_embedding
+
+    db = get_supabase()
+    stats = {"products": 0, "solutions": 0, "faqs": 0, "errors": []}
+
+    async def upsert_doc(content: str, source_type: str, source_id: str, title: str, metadata: dict):
+        try:
+            embedding = await get_embedding(content)
+            db.table("documents").upsert(
+                {
+                    "content": content,
+                    "embedding": embedding,
+                    "source_type": source_type,
+                    "source_id": source_id,
+                    "title": title,
+                    "metadata": metadata,
+                },
+                on_conflict="source_type,source_id",
+            ).execute()
+        except Exception as e:
+            stats["errors"].append(f"{source_type}/{source_id}: {str(e)}")
+
+    # 向量化产品
+    products = db.table("products").select("*").execute().data or []
+    for p in products:
+        specs = p.get("specs") or {}
+        spec_lines = "\n".join(f"  {k}: {v}" for k, v in specs.items()) if isinstance(specs, dict) else ""
+        use_cases = ", ".join(p.get("use_cases") or [])
+        text = (
+            f"Product: {p['name']} (Model: {p.get('model_number', '')})\n"
+            f"Category: {p.get('category', '')}\n"
+            f"Description: {p.get('description', '')}\n"
+            f"Payload: {p.get('payload_kg', '')} kg  Speed: {p.get('speed_ms', '')} m/s\n"
+            f"Use cases: {use_cases}\n"
+            f"Specifications:\n{spec_lines}"
+        )
+        await upsert_doc(text, "product", p["model_number"],
+                         f"{p['name']} ({p.get('model_number', '')})",
+                         {"category": p.get("category"), "payload_kg": p.get("payload_kg"), "speed_ms": p.get("speed_ms")})
+        stats["products"] += 1
+
+    # 向量化方案
+    solutions = db.table("solutions").select("*").execute().data or []
+    for s in solutions:
+        metrics = s.get("key_metrics") or {}
+        metric_lines = "\n".join(f"  {k}: {v}" for k, v in metrics.items()) if isinstance(metrics, dict) else ""
+        related = ", ".join(s.get("related_products") or [])
+        text = (
+            f"Solution: {s['name']} (slug: {s.get('slug', '')})\n"
+            f"Description: {s.get('description', '')}\n"
+            f"Key metrics:\n{metric_lines}\n"
+            f"Related products: {related}"
+        )
+        await upsert_doc(text, "solution", s["slug"], s["name"],
+                         {"related_products": s.get("related_products")})
+        stats["solutions"] += 1
+
+    # 向量化 FAQ
+    faqs = db.table("faqs").select("*").execute().data or []
+    for f in faqs:
+        text = f"FAQ Category: {f.get('category', '')}\nQ: {f['question']}\nA: {f['answer']}"
+        await upsert_doc(text, "faq", str(f["id"]), f["question"][:100],
+                         {"category": f.get("category")})
+        stats["faqs"] += 1
+
+    print(f"Vectorization complete: {stats}")
+    return {"ok": True, "stats": stats}
+
+
 @app.get("/logs")
 async def get_logs(
     limit: int = 100,

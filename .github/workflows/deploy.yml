@@ -10,11 +10,13 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write   # 需要写权限来提交更新的 content/*.ts
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -25,14 +27,36 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # ── Step 1: 从 TSX 页面提取内容 → 更新 content/*.ts ──────────────────
+      - name: Extract content from TSX pages
+        run: npm run extract
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      # ── Step 2: 提交更新后的 content/*.ts（如果有变化）────────────────────
+      - name: Commit updated content files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add content/
+          if git diff --staged --quiet; then
+            echo "No content changes to commit"
+          else
+            git commit -m "chore: auto-update content from TSX pages [skip ci]"
+            git push
+          fi
+
+      # ── Step 3: 构建 Next.js 静态站 ───────────────────────────────────────
       - name: Build Next.js static export
         run: npm run build
         env:
-          NEXT_PUBLIC_SITE_URL: https://claude-warehouse-v2.kingman-chang.workers.dev
+          NEXT_PUBLIC_SITE_URL: https://robotlyne.com
           NEXT_PUBLIC_BACKEND_URL: https://kcpvsulmbpbd.usw-1.sealos.app
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
+      # ── Step 4: 部署到 Cloudflare Worker ──────────────────────────────────
       - name: Deploy Worker to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
@@ -40,3 +64,16 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: cloudflare-worker
           command: deploy
+
+      # ── Step 5: 触发后端重新向量化 RAG ────────────────────────────────────
+      - name: Trigger backend RAG vectorization
+        run: |
+          echo "Triggering vectorization..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            https://kcpvsulmbpbd.usw-1.sealos.app/vectorize \
+            -H "Content-Type: application/json" \
+            --max-time 120)
+          echo "Vectorize status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Warning: vectorization returned $STATUS (non-blocking)"
+          fi
