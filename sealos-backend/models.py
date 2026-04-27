@@ -75,11 +75,13 @@ class LogEntry(BaseModel):
     method: Optional[str] = None
     pathname: Optional[str] = None
     user_agent: Optional[str] = None
-    visitor_type: Optional[str] = None  # 'human' | 'ai_agent' | 'ai_crawler' | 'mcp' | 'static'
-    routed_to: Optional[str] = None     # 'page' | 'backend' | 'self'
+    visitor_type: Optional[str] = None  # 'human' | 'ai_agent' | 'ai_crawler'
+    routed_to: Optional[str] = None     # 'page' | 'backend'
     status_code: Optional[int] = None
     duration_ms: Optional[int] = None
     ip: Optional[str] = None
+    country: Optional[str] = None
+    referer: Optional[str] = None
 
 
 class MCPExecuteRequest(BaseModel):

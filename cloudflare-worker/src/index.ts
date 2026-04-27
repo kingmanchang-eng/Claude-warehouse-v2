@@ -181,6 +181,8 @@ export default {
     const { pathname, search } = url
     const ua = (request.headers.get('User-Agent') ?? '').toLowerCase()
     const ip = request.headers.get('cf-connecting-ip') ?? ''
+    const country = request.headers.get('cf-ipcountry') ?? ''
+    const referer = request.headers.get('referer') ?? ''
     const method = request.method
 
     // CORS preflight
@@ -208,7 +210,7 @@ export default {
         routed_to:    'backend',
         status_code:  response.status,
         duration_ms:  Date.now() - start,
-        ip,
+        ip, country, referer,
       })
       return response
     }
@@ -222,7 +224,7 @@ export default {
         visitor_type: 'ai_crawler',
         routed_to:    'page',
         status_code:  response.status,
-        ip,
+        ip, country, referer,
       })
       return response
     }
@@ -237,7 +239,7 @@ export default {
       routed_to:    'page',
       status_code:  response.status,
       duration_ms:  Date.now() - start,
-      ip,
+      ip, country, referer,
     })
     return response
   },

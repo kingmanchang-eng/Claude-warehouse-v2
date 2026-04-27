@@ -62,15 +62,30 @@ async def log_backend_requests(request: Request, call_next):
     duration = int((time.time() - start) * 1000)
 
     try:
+        ua = request.headers.get("user-agent") or ""
+        ua_lower = ua.lower()
+        # 判断访问者类型
+        if any(x in ua_lower for x in ["chatgpt-user", "claude-web"]):
+            visitor_type = "ai_agent"
+        elif any(x in ua_lower for x in ["gptbot", "claudebot", "anthropic-ai", "ccbot",
+                                          "perplexitybot", "youbot", "cohere-ai", "bytespider",
+                                          "amazonbot", "applebot"]):
+            visitor_type = "ai_crawler"
+        else:
+            visitor_type = "human"
+
         db = get_supabase()
         db.table("access_logs").insert({
-            "source":      "backend",
-            "method":      request.method,
-            "pathname":    request.url.path,
-            "user_agent":  request.headers.get("user-agent"),
-            "status_code": response.status_code,
-            "duration_ms": duration,
-            "ip":          request.headers.get("x-forwarded-for") or request.client.host,
+            "source":       "backend",
+            "method":       request.method,
+            "pathname":     request.url.path,
+            "user_agent":   ua,
+            "visitor_type": visitor_type,
+            "status_code":  response.status_code,
+            "duration_ms":  duration,
+            "ip":           request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for") or (request.client.host if request.client else ""),
+            "country":      request.headers.get("cf-ipcountry") or "",
+            "referer":      request.headers.get("referer") or "",
         }).execute()
     except Exception:
         pass  # 日志写入失败不影响正常响应
