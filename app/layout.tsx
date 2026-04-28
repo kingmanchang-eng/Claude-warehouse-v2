@@ -19,6 +19,11 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: 'RobotLyne | Warehouse Automation Systems',
+  icons: {
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
+    apple: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({
