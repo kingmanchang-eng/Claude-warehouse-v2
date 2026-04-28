@@ -49,11 +49,11 @@ function sendLog(ctx: ExecutionContext, entry: Record<string, unknown>): void {
 
 // ── 后端数据获取 ────────────────────────────────────────────────────────────
 
-async function fetchJSON(path: string): Promise<any> {
+async function fetchJSON(path: string, ua?: string): Promise<any> {
   try {
-    const res = await fetch(`${BACKEND_URL}${path}`, {
-      headers: { Accept: 'application/json' },
-    })
+    const headers: Record<string, string> = { Accept: 'application/json' }
+    if (ua) headers['User-Agent'] = ua
+    const res = await fetch(`${BACKEND_URL}${path}`, { headers })
     if (!res.ok) return null
     return res.json()
   } catch {
@@ -97,7 +97,7 @@ function faqsToMarkdown(faqs: any[]): string {
 
 // ── AI 代理处理：调后端返回实时 Markdown ───────────────────────────────────
 
-async function handleAIAgent(pathname: string): Promise<Response> {
+async function handleAIAgent(pathname: string, ua: string): Promise<Response> {
   const header = [
     '# RobotLyne — Warehouse Automation Systems',
     '',
@@ -111,28 +111,28 @@ async function handleAIAgent(pathname: string): Promise<Response> {
   try {
     if (pathname.startsWith('/products/') && pathname.length > '/products/'.length) {
       const model = pathname.replace('/products/', '').replace(/\/$/, '')
-      const product = await fetchJSON(`/products/${model}`)
+      const product = await fetchJSON(`/products/${model}`, ua)
       body = product
         ? `## Product Detail\n\n${productsToMarkdown([product])}`
         : `_Product not found: ${model}_`
 
     } else if (pathname === '/products' || pathname === '/products/') {
-      const products = await fetchJSON('/products')
+      const products = await fetchJSON('/products', ua)
       body = `## All Products\n\n${productsToMarkdown(products || [])}`
 
     } else if (pathname.startsWith('/solutions/') && pathname.length > '/solutions/'.length) {
       const slug = pathname.replace('/solutions/', '').replace(/\/$/, '')
-      const solution = await fetchJSON(`/solutions/${slug}`)
+      const solution = await fetchJSON(`/solutions/${slug}`, ua)
       body = solution
         ? `## Solution Detail\n\n${solutionsToMarkdown([solution])}`
         : `_Solution not found: ${slug}_`
 
     } else if (pathname === '/solutions' || pathname === '/solutions/') {
-      const solutions = await fetchJSON('/solutions')
+      const solutions = await fetchJSON('/solutions', ua)
       body = `## All Solutions\n\n${solutionsToMarkdown(solutions || [])}`
 
     } else if (pathname === '/faqs' || pathname === '/faqs/') {
-      const faqs = await fetchJSON('/faqs')
+      const faqs = await fetchJSON('/faqs', ua)
       body = `## Frequently Asked Questions\n\n${faqsToMarkdown(faqs || [])}`
 
     } else {
@@ -202,7 +202,7 @@ export default {
     // 1. AI 代理 → 后端实时数据（Markdown）
     if (isAIAgent(ua)) {
       const start = Date.now()
-      const response = await handleAIAgent(cleanPath)
+      const response = await handleAIAgent(cleanPath, request.headers.get('User-Agent') ?? '')
       sendLog(ctx, {
         method, pathname,
         user_agent:   request.headers.get('User-Agent'),
