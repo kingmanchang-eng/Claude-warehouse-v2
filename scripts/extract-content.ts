@@ -240,6 +240,36 @@ function shouldProcess(changedFiles: Set<string>, tsxRelPath: string): boolean {
   return changedFiles.has(tsxRelPath)
 }
 
+// ── 删除检测：清理已删除 TSX 对应的 content/*.ts ──────────────────────────────
+
+function cleanDeletedPages(): void {
+  try {
+    const { execSync } = require('child_process') as typeof import('child_process')
+    const output = execSync('git diff --name-only --diff-filter=D HEAD~1 HEAD 2>/dev/null || echo ""', { encoding: 'utf-8' })
+    const deleted = output.split('\n').map(f => f.trim()).filter(Boolean)
+    for (const file of deleted) {
+      const productMatch = file.match(/^app\/products\/([^/]+)\/page\.tsx$/)
+      if (productMatch) {
+        const contentFile = path.join(CONTENT_DIR, 'products', `${productMatch[1]}.ts`)
+        if (fs.existsSync(contentFile)) {
+          fs.unlinkSync(contentFile)
+          console.log(`  deleted: content/products/${productMatch[1]}.ts`)
+        }
+      }
+      const solutionMatch = file.match(/^app\/solutions\/([^/]+)\/page\.tsx$/)
+      if (solutionMatch) {
+        const contentFile = path.join(CONTENT_DIR, 'solutions', `${solutionMatch[1]}.ts`)
+        if (fs.existsSync(contentFile)) {
+          fs.unlinkSync(contentFile)
+          console.log(`  deleted: content/solutions/${solutionMatch[1]}.ts`)
+        }
+      }
+    }
+  } catch {
+    console.log('  (could not detect deleted pages)')
+  }
+}
+
 // ── 主流程 ──────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -248,6 +278,7 @@ async function main() {
     process.exit(1)
   }
 
+  cleanDeletedPages()
   const changedFiles = getChangedTsxFiles()
   let extracted = 0
 

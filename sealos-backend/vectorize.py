@@ -135,11 +135,42 @@ async def vectorize_faqs():
         print(f"  done: FAQ #{f['id']}")
 
 
+def cleanup_orphaned_documents():
+    """删除 documents 表中已不存在对应数据的孤立向量"""
+    print("Cleaning up orphaned documents...")
+
+    # 当前有效的 product source_id
+    products = db.table("products").select("model_number").execute().data or []
+    valid_products = [p["model_number"] for p in products]
+
+    # 当前有效的 solution source_id
+    solutions = db.table("solutions").select("slug").execute().data or []
+    valid_solutions = [s["slug"] for s in solutions]
+
+    # 查出所有 product/solution 类型的 documents
+    docs = db.table("documents").select("id,source_type,source_id") \
+        .in_("source_type", ["product", "solution"]).execute().data or []
+
+    deleted = 0
+    for doc in docs:
+        if doc["source_type"] == "product" and doc["source_id"] not in valid_products:
+            db.table("documents").delete().eq("id", doc["id"]).execute()
+            print(f"  deleted orphan: product/{doc['source_id']}")
+            deleted += 1
+        elif doc["source_type"] == "solution" and doc["source_id"] not in valid_solutions:
+            db.table("documents").delete().eq("id", doc["id"]).execute()
+            print(f"  deleted orphan: solution/{doc['source_id']}")
+            deleted += 1
+
+    print(f"  {deleted} orphaned document(s) removed.")
+
+
 async def main():
     print("Starting vectorization...\n")
     await vectorize_products()
     await vectorize_solutions()
     await vectorize_faqs()
+    cleanup_orphaned_documents()
     print("\nVectorization complete.")
 
 

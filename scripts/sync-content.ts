@@ -41,6 +41,15 @@ async function syncProducts() {
     if (error) console.error(`  ✗ ${p.model_number}:`, error.message)
     else console.log(`  ✓ ${p.model_number}`)
   }
+  // 清理已删除的产品
+  const currentIds = allProducts.map(p => p.model_number)
+  const { data: existing } = await supabase.from('products').select('model_number')
+  for (const row of existing ?? []) {
+    if (!currentIds.includes(row.model_number)) {
+      await supabase.from('products').delete().eq('model_number', row.model_number)
+      console.log(`  🗑 removed: ${row.model_number}`)
+    }
+  }
 }
 
 async function syncSolutions() {
@@ -58,6 +67,15 @@ async function syncSolutions() {
       .upsert(record, { onConflict: 'slug' })
     if (error) console.error(`  ✗ ${s.slug}:`, error.message)
     else console.log(`  ✓ ${s.slug}`)
+  }
+  // 清理已删除的解决方案
+  const currentSlugs = allSolutions.map(s => s.slug)
+  const { data: existing } = await supabase.from('solutions').select('slug')
+  for (const row of existing ?? []) {
+    if (!currentSlugs.includes(row.slug)) {
+      await supabase.from('solutions').delete().eq('slug', row.slug)
+      console.log(`  🗑 removed: ${row.slug}`)
+    }
   }
 }
 
