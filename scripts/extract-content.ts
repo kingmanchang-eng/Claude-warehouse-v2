@@ -219,6 +219,27 @@ ${combined.slice(0, 30000)}`
   console.log(`  ✓ content/faqs.ts (${faqs.length} FAQs)`)
 }
 
+// ── 变更检测：只处理 git diff 中变化的 TSX 文件 ────────────────────────────
+
+function getChangedTsxFiles(): Set<string> {
+  try {
+    const { execSync } = require('child_process') as typeof import('child_process')
+    // 获取与上一个 commit 相比变化的文件
+    const output = execSync('git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only HEAD 2>/dev/null || echo ""', { encoding: 'utf-8' })
+    const files = new Set(output.split('\n').map(f => f.trim()).filter(Boolean))
+    console.log('Changed files:', [...files].filter(f => f.endsWith('.tsx')).join(', ') || 'none')
+    return files
+  } catch {
+    // 无法获取 diff 时，处理所有文件
+    return new Set(['ALL'])
+  }
+}
+
+function shouldProcess(changedFiles: Set<string>, tsxRelPath: string): boolean {
+  if (changedFiles.has('ALL')) return true
+  return changedFiles.has(tsxRelPath)
+}
+
 // ── 主流程 ──────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -227,24 +248,46 @@ async function main() {
     process.exit(1)
   }
 
+  const changedFiles = getChangedTsxFiles()
+  let extracted = 0
+
   console.log('Extracting products...')
   const productSlugs = fs.readdirSync(path.join(APP_DIR, 'products'))
     .filter(d => fs.statSync(path.join(APP_DIR, 'products', d)).isDirectory())
   for (const slug of productSlugs) {
-    await extractProduct(slug)
+    const rel = `app/products/${slug}/page.tsx`
+    if (shouldProcess(changedFiles, rel)) {
+      await extractProduct(slug)
+      extracted++
+    } else {
+      console.log(`  skip (unchanged): ${slug}`)
+    }
   }
 
   console.log('\nExtracting solutions...')
   const solutionSlugs = fs.readdirSync(path.join(APP_DIR, 'solutions'))
     .filter(d => fs.statSync(path.join(APP_DIR, 'solutions', d)).isDirectory())
   for (const slug of solutionSlugs) {
-    await extractSolution(slug)
+    const rel = `app/solutions/${slug}/page.tsx`
+    if (shouldProcess(changedFiles, rel)) {
+      await extractSolution(slug)
+      extracted++
+    } else {
+      console.log(`  skip (unchanged): ${slug}`)
+    }
   }
 
-  console.log('\nExtracting FAQs...')
-  await extractFaqs()
+  // FAQ 只在相关页面变化时重新提取
+  const faqPages = ['app/page.tsx', 'app/about/page.tsx']
+  if (faqPages.some(p => shouldProcess(changedFiles, p))) {
+    console.log('\nExtracting FAQs...')
+    await extractFaqs()
+    extracted++
+  } else {
+    console.log('\nFAQs: skip (no relevant page changes)')
+  }
 
-  console.log('\nDone.')
+  console.log(`\nDone. Extracted ${extracted} item(s).`)
 }
 
 main().catch(e => { console.error(e); process.exit(1) })
